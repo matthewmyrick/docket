@@ -124,9 +124,11 @@ Follow the Zig standard library conventions exactly:
 
 ## 8. Concurrency
 
-- **Two threads, one mutex, one condvar.** UI thread + poller thread; the
-  mutex guards only the snapshot pointer swap; the condvar wakes the poller
-  early for manual refresh / shutdown. That is the complete concurrency
+- **Two threads, one mutex, one wake event.** UI thread + poller thread; the
+  mutex guards the snapshot pointer (held by the UI across draw+render, see
+  SPEC §4); an `std.Io.Event` with `waitTimeout` wakes the poller early for
+  manual refresh / shutdown (Zig 0.16's `std.Io` has no condvar `timedWait`;
+  the Event is the idiomatic equivalent). That is the complete concurrency
   design. Any addition requires updating SPEC §4 first.
 - Data crossing threads is **immutable after publish** (the snapshot). No
   atomics-as-cleverness; no lock-free anything.

@@ -1,16 +1,18 @@
 //! The persistent bottom status bar: next-event countdown, refresh age,
-//! fetch problems (SPEC §7a). Formatted text lives in the caller's per-frame
-//! scratch (vaxis references it until render).
+//! fetch problems (SPEC §7a, §8). Formatted text lives in the caller's
+//! per-frame scratch (vaxis references it until render).
 
 const std = @import("std");
 const vaxis = @import("vaxis");
 const theme = @import("theme.zig");
+const poller_mod = @import("../poller.zig");
 const snapshot_mod = @import("../snapshot.zig");
 
 pub const State = struct {
     now: i64,
-    /// True when the most recent fetch failed (stale data on screen).
-    fetch_failed: bool,
+    /// 0 = healthy; 1+ shows the quiet warning; at
+    /// poller.failure_banner_threshold it escalates to a banner.
+    consecutive_failures: u32 = 0,
     hint: []const u8 = "? help",
 };
 
@@ -20,11 +22,20 @@ pub fn draw(
     snapshot: ?*const snapshot_mod.Snapshot,
     state: State,
 ) void {
-    if (win.height == 0) return;
+    if (win.height < 2) return;
     const row = win.height - 1;
     var x: u16 = 1;
 
-    if (state.fetch_failed) {
+    if (state.consecutive_failures >= poller_mod.failure_banner_threshold) {
+        const banner = std.fmt.allocPrint(
+            scratch,
+            " ⚠ calendar refresh has failed {d} times — showing cached data; check that `ical list` works ",
+            .{state.consecutive_failures},
+        ) catch return;
+        _ = printAt(win, 0, row - 1, banner, theme.err);
+    }
+
+    if (state.consecutive_failures > 0) {
         x = printAt(win, x, row, "⚠ refresh failed (using cached)", theme.warning);
         x = printAt(win, x, row, "  ·  ", theme.dim);
     }

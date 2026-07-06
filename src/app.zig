@@ -1,12 +1,13 @@
 //! App state machine: which view is on screen, the selected day, key
-//! dispatch, and snapshot ownership. The UI thread reads snapshots; it never
-//! fetches on its own once the poller exists (M3) — until then, refreshes
-//! are synchronous and explicit.
+//! dispatch. The UI thread never fetches — data arrives via the poller; the
+//! UI reads the current snapshot under the poller's mutex, held from draw
+//! through render so snapshot strings referenced by vaxis stay alive.
 
 const std = @import("std");
 const vaxis = @import("vaxis");
 
-const source_mod = @import("calendar/source.zig");
+const config_mod = @import("config.zig");
+const poller_mod = @import("poller.zig");
 const time_mod = @import("calendar/time.zig");
 const event_mod = @import("calendar/event.zig");
 const snapshot_mod = @import("snapshot.zig");
@@ -19,9 +20,8 @@ const statusbar = @import("ui/statusbar.zig");
 const CivilDate = time_mod.CivilDate;
 const Snapshot = snapshot_mod.Snapshot;
 
-/// Fetch window relative to the viewed month (SPEC §5): generous enough to
-/// cover the grid plus notification horizon; navigation outside triggers a
-/// refetch, not accumulation.
+/// Fetch window relative to the viewed month when navigation leaves the
+/// loaded range (SPEC §5).
 const window_back_days: i64 = 8;
 const window_forward_days: i64 = 62;
 
@@ -33,65 +33,34 @@ const scratch_size = 8 * 1024;
 pub const View = enum { month, day, detail };
 
 pub const App = struct {
-    gpa: std.mem.Allocator,
     io: std.Io,
     zone: time_mod.Zone,
-    source: source_mod.CalendarSource,
-    snapshot: ?*Snapshot = null,
+    poller: *poller_mod.Poller,
+    week_start: config_mod.WeekStart,
     view: View = .month,
     selected: CivilDate,
-    fetch_failed: bool = false,
     should_quit: bool = false,
     /// Selected event within the day view (index into eventsOnDay).
     day_index: usize = 0,
     detail_scroll: usize = 0,
     help_visible: bool = false,
     scratch_buffer: [scratch_size]u8 = undefined, // written before every read via FixedBufferAllocator
+    /// Stable copy of a link for subprocess use after the lock is dropped.
+    link_buffer: [512]u8 = undefined,
 
-    /// Loads the local timezone and picks the calendar source. Call
-    /// `refresh()` for the initial data load. Deinit with `deinit()`.
-    pub fn init(gpa: std.mem.Allocator, io: std.Io) App {
-        const zone = time_mod.Zone.loadLocal(gpa, io);
-        const today = time_mod.localDate(nowUnix(io), zone);
+    pub fn init(
+        io: std.Io,
+        zone: time_mod.Zone,
+        poller: *poller_mod.Poller,
+        week_start: config_mod.WeekStart,
+    ) App {
         return .{
-            .gpa = gpa,
             .io = io,
             .zone = zone,
-            .source = .{ .ical_cli = .{ .gpa = gpa, .io = io } },
-            .selected = today,
+            .poller = poller,
+            .week_start = week_start,
+            .selected = time_mod.localDate(poller_mod.nowUnix(io), zone),
         };
-    }
-
-    pub fn deinit(self: *App) void {
-        if (self.snapshot) |snapshot| snapshot.deinit();
-        self.snapshot = null;
-        self.zone.deinit();
-    }
-
-    /// Synchronous fetch covering the currently viewed month. On failure the
-    /// previous snapshot stays on screen and the status bar shows a warning
-    /// (CODING_STANDARDS §4: the UI never crashes on data problems).
-    pub fn refresh(self: *App) void {
-        const month_start = CivilDate{ .year = self.selected.year, .month = self.selected.month, .day = 1 };
-        const from = time_mod.dayBounds(time_mod.addDays(month_start, -window_back_days), self.zone).start;
-        const to = time_mod.dayBounds(time_mod.addDays(month_start, window_forward_days), self.zone).end;
-
-        const fresh = Snapshot.build(self.gpa, &self.source, from, to, nowUnix(self.io)) catch {
-            self.fetch_failed = true;
-            return;
-        };
-        if (self.snapshot) |old| old.deinit();
-        self.snapshot = fresh;
-        self.fetch_failed = false;
-    }
-
-    /// Refetch when the selection has navigated outside the loaded window.
-    fn ensureWindowCovers(self: *App) void {
-        const snapshot = self.snapshot orelse return;
-        const bounds = time_mod.dayBounds(self.selected, self.zone);
-        if (bounds.start < snapshot.window_from or bounds.end > snapshot.window_to) {
-            self.refresh();
-        }
     }
 
     pub fn handleKey(self: *App, key: vaxis.Key) void {
@@ -100,7 +69,7 @@ pub const App = struct {
             return;
         }
         if (self.help_visible) {
-            // Any key dismisses the overlay; ? and Esc feel natural.
+            // Any key dismisses the overlay.
             self.help_visible = false;
             return;
         }
@@ -109,11 +78,11 @@ pub const App = struct {
             return;
         }
         if (key.matches('r', .{})) {
-            self.refresh();
+            self.poller.wake();
             return;
         }
         if (key.matches('t', .{})) {
-            self.selected = time_mod.localDate(nowUnix(self.io), self.zone);
+            self.selected = time_mod.localDate(poller_mod.nowUnix(self.io), self.zone);
             self.day_index = 0;
             self.ensureWindowCovers();
             return;
@@ -156,10 +125,14 @@ pub const App = struct {
         } else if (key.matches(vaxis.Key.up, .{}) or key.matches('k', .{})) {
             self.day_index -|= 1;
         } else if (key.matches(vaxis.Key.down, .{}) or key.matches('j', .{})) {
-            const count = self.dayEventCount();
+            self.lockPoller();
+            defer self.unlockPoller();
+            const count = self.dayEventCountLocked();
             if (count > 0 and self.day_index + 1 < count) self.day_index += 1;
         } else if (key.matches(vaxis.Key.enter, .{})) {
-            if (self.selectedEvent() != null) {
+            self.lockPoller();
+            defer self.unlockPoller();
+            if (self.selectedEventLocked() != null) {
                 self.detail_scroll = 0;
                 self.view = .detail;
             }
@@ -174,59 +147,10 @@ pub const App = struct {
         } else if (key.matches(vaxis.Key.down, .{}) or key.matches('j', .{})) {
             self.detail_scroll += 1; // clamped against content in draw
         } else if (key.matches('o', .{})) {
-            if (self.selectedEvent()) |event| {
-                const link = if (event.video_link.len > 0) event.video_link else event.url;
-                if (link.len > 0) self.openUrl(link);
-            }
+            if (self.copySelectedLink()) |link| self.openUrl(link);
         } else if (key.matches('c', .{})) {
-            if (self.selectedEvent()) |event| {
-                const link = if (event.video_link.len > 0) event.video_link else event.url;
-                if (link.len > 0) self.copyToClipboard(link);
-            }
+            if (self.copySelectedLink()) |link| self.copyToClipboard(link);
         }
-    }
-
-    fn dayEventCount(self: *App) usize {
-        const snapshot = self.snapshot orelse return 0;
-        return @min(
-            snapshot.countOnDay(self.selected, self.zone),
-            day_view.max_events,
-        );
-    }
-
-    /// The event the day cursor is on. Recomputed from the snapshot (never
-    /// stored) so a refresh can't leave a dangling pointer.
-    fn selectedEvent(self: *App) ?event_mod.Event {
-        const snapshot = self.snapshot orelse return null;
-        var events_buffer: [day_view.max_events]event_mod.Event = undefined;
-        const events = snapshot.eventsOnDay(&events_buffer, self.selected, self.zone);
-        if (events.len == 0) return null;
-        self.day_index = @min(self.day_index, events.len - 1);
-        return events[self.day_index];
-    }
-
-    /// Launch the default browser; fire and forget (`open` returns fast).
-    fn openUrl(self: *App, url: []const u8) void {
-        const result = std.process.run(self.gpa, self.io, .{
-            .argv = &.{ "open", url },
-        }) catch return; // best-effort: a broken opener must not kill the TUI
-        self.gpa.free(result.stdout);
-        self.gpa.free(result.stderr);
-    }
-
-    fn copyToClipboard(self: *App, text: []const u8) void {
-        var child = std.process.spawn(self.io, .{
-            .argv = &.{"pbcopy"},
-            .stdin = .pipe,
-            .stdout = .ignore,
-            .stderr = .ignore,
-        }) catch return; // best-effort
-        if (child.stdin) |stdin| {
-            stdin.writeStreamingAll(self.io, text) catch {}; // best-effort
-            stdin.close(self.io);
-            child.stdin = null;
-        }
-        _ = child.wait(self.io) catch {}; // best-effort
     }
 
     fn moveSelection(self: *App, delta_days: i64) void {
@@ -244,18 +168,103 @@ pub const App = struct {
         self.ensureWindowCovers();
     }
 
+    /// Ask the poller for a wider window when the selection leaves the
+    /// loaded one. The stale grid stays visible until the fetch lands.
+    fn ensureWindowCovers(self: *App) void {
+        const bounds = time_mod.dayBounds(self.selected, self.zone);
+        var needs_fetch = false;
+        {
+            self.lockPoller();
+            defer self.unlockPoller();
+            const snapshot = self.poller.snapshot orelse return;
+            needs_fetch = bounds.start < snapshot.window_from or bounds.end > snapshot.window_to;
+        }
+        if (needs_fetch) {
+            const month_start = CivilDate{ .year = self.selected.year, .month = self.selected.month, .day = 1 };
+            const from = time_mod.dayBounds(time_mod.addDays(month_start, -window_back_days), self.zone).start;
+            const to = time_mod.dayBounds(time_mod.addDays(month_start, window_forward_days), self.zone).end;
+            self.poller.requestWindow(from, to);
+        }
+    }
+
+    /// Copy the selected event's video link (or url) out of the snapshot
+    /// under the lock, so the subprocess runs on a stable copy.
+    fn copySelectedLink(self: *App) ?[]const u8 {
+        self.lockPoller();
+        defer self.unlockPoller();
+        const event = self.selectedEventLocked() orelse return null;
+        const link = if (event.video_link.len > 0) event.video_link else event.url;
+        if (link.len == 0 or link.len > self.link_buffer.len) return null;
+        @memcpy(self.link_buffer[0..link.len], link);
+        return self.link_buffer[0..link.len];
+    }
+
+    /// Callers must hold the poller mutex.
+    fn dayEventCountLocked(self: *App) usize {
+        const snapshot = self.poller.snapshot orelse return 0;
+        return @min(snapshot.countOnDay(self.selected, self.zone), day_view.max_events);
+    }
+
+    /// The event the day cursor is on; callers must hold the poller mutex
+    /// and drop the result before unlocking (strings live in the arena).
+    fn selectedEventLocked(self: *App) ?event_mod.Event {
+        const snapshot = self.poller.snapshot orelse return null;
+        var events_buffer: [day_view.max_events]event_mod.Event = undefined;
+        const events = snapshot.eventsOnDay(&events_buffer, self.selected, self.zone);
+        if (events.len == 0) return null;
+        self.day_index = @min(self.day_index, events.len - 1);
+        return events[self.day_index];
+    }
+
+    /// Launch the default browser; best-effort (a broken opener must not
+    /// kill the TUI).
+    fn openUrl(self: *App, url: []const u8) void {
+        const result = std.process.run(self.poller.gpa, self.io, .{
+            .argv = &.{ "open", url },
+        }) catch return;
+        self.poller.gpa.free(result.stdout);
+        self.poller.gpa.free(result.stderr);
+    }
+
+    fn copyToClipboard(self: *App, text: []const u8) void {
+        var child = std.process.spawn(self.io, .{
+            .argv = &.{"pbcopy"},
+            .stdin = .pipe,
+            .stdout = .ignore,
+            .stderr = .ignore,
+        }) catch return; // best-effort
+        if (child.stdin) |stdin| {
+            stdin.writeStreamingAll(self.io, text) catch {}; // best-effort
+            stdin.close(self.io);
+            child.stdin = null;
+        }
+        _ = child.wait(self.io) catch {}; // best-effort
+    }
+
+    pub fn lockPoller(self: *App) void {
+        self.poller.mutex.lockUncancelable(self.io);
+    }
+
+    pub fn unlockPoller(self: *App) void {
+        self.poller.mutex.unlock(self.io);
+    }
+
+    /// Draw the current view. The caller (main loop) holds the poller mutex
+    /// from before this call until after vx.render() — snapshot strings are
+    /// referenced by vaxis until then.
     pub fn draw(self: *App, win: vaxis.Window) void {
         win.clear();
         var scratch_state = std.heap.FixedBufferAllocator.init(&self.scratch_buffer);
         const scratch = scratch_state.allocator();
-        const now = nowUnix(self.io);
-        const snapshot: ?*const Snapshot = self.snapshot;
+        const now = poller_mod.nowUnix(self.io);
+        const snapshot: ?*const Snapshot = self.poller.snapshot;
         switch (self.view) {
             .month => month_view.draw(win, scratch, snapshot, .{
                 .selected = self.selected,
                 .today = time_mod.localDate(now, self.zone),
                 .zone = self.zone,
-                .source_name = self.source.name(),
+                .source_name = self.poller.source.name(),
+                .week_start = self.week_start,
             }),
             .day => day_view.draw(win, scratch, snapshot, .{
                 .date = self.selected,
@@ -263,7 +272,7 @@ pub const App = struct {
                 .zone = self.zone,
             }),
             .detail => {
-                if (self.selectedEvent()) |event| {
+                if (self.selectedEventLocked()) |event| {
                     self.detail_scroll = detail_view.draw(win, scratch, event, .{
                         .zone = self.zone,
                         .scroll = self.detail_scroll,
@@ -273,11 +282,10 @@ pub const App = struct {
                 }
             },
         }
-        statusbar.draw(win, scratch, snapshot, .{ .now = now, .fetch_failed = self.fetch_failed });
+        statusbar.draw(win, scratch, snapshot, .{
+            .now = now,
+            .consecutive_failures = self.poller.consecutive_failures,
+        });
         if (self.help_visible) help_view.draw(win);
     }
 };
-
-fn nowUnix(io: std.Io) i64 {
-    return std.Io.Clock.real.now(io).toSeconds();
-}

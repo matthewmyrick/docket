@@ -6,6 +6,7 @@
 const std = @import("std");
 const vaxis = @import("vaxis");
 const theme = @import("theme.zig");
+const config_mod = @import("../config.zig");
 const time_mod = @import("../calendar/time.zig");
 const event_mod = @import("../calendar/event.zig");
 const snapshot_mod = @import("../snapshot.zig");
@@ -24,7 +25,17 @@ pub const State = struct {
     today: CivilDate,
     zone: time_mod.Zone,
     source_name: []const u8,
+    week_start: config_mod.WeekStart = .monday,
 };
+
+/// Grid column (0..6) for a date under the configured week start.
+fn columnFor(date: CivilDate, week_start: config_mod.WeekStart) u16 {
+    const iso: u16 = @intFromEnum(time_mod.weekday(date)); // 0 = Monday
+    return switch (week_start) {
+        .monday => iso,
+        .sunday => (iso + 1) % 7,
+    };
+}
 
 pub fn draw(
     win: vaxis.Window,
@@ -33,7 +44,7 @@ pub fn draw(
     state: State,
 ) void {
     drawHeader(win, scratch, state);
-    drawWeekdayHeader(win);
+    drawWeekdayHeader(win, state.week_start);
     const grid_rows = drawGrid(win, scratch, snapshot, state);
     drawPeek(win, scratch, snapshot, state, 3 + grid_rows * 2 + 1);
 }
@@ -52,9 +63,14 @@ fn drawHeader(win: vaxis.Window, scratch: std.mem.Allocator, state: State) void 
     }
 }
 
-fn drawWeekdayHeader(win: vaxis.Window) void {
-    for (time_mod.weekday_names_short, 0..) |name, i| {
-        printAt(win, grid_left + @as(u16, @intCast(i)) * cell_width + 1, 2, name, theme.subtle);
+fn drawWeekdayHeader(win: vaxis.Window, week_start: config_mod.WeekStart) void {
+    for (0..7) |column| {
+        const iso: usize = switch (week_start) {
+            .monday => column,
+            .sunday => (column + 6) % 7,
+        };
+        const name = time_mod.weekday_names_short[iso];
+        printAt(win, grid_left + @as(u16, @intCast(column)) * cell_width + 1, 2, name, theme.subtle);
     }
 }
 
@@ -68,8 +84,7 @@ fn drawGrid(
     const year = state.selected.year;
     const month = state.selected.month;
     const first = CivilDate{ .year = year, .month = month, .day = 1 };
-    // Week starts Monday until config lands (M3); ISO weekday index 0 = Monday.
-    const lead: u16 = @intFromEnum(time_mod.weekday(first));
+    const lead: u16 = columnFor(first, state.week_start);
     const days_in_month: u16 = time_mod.daysInMonth(year, month);
     const weeks: u16 = (lead + days_in_month + 6) / 7;
 

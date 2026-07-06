@@ -58,12 +58,17 @@ pub const Event = struct {
 
 /// Video-call providers we recognize, table-driven so adding one is a
 /// one-line change (+ a test case, see CONTRIBUTING §5).
-const video_providers = [_][]const u8{
-    "zoom.us/j/",
-    "meet.google.com/",
-    "teams.microsoft.com/l/meetup-join",
-    "whereby.com/",
-    "webex.com/meet",
+const VideoProvider = struct {
+    pattern: []const u8,
+    display: []const u8,
+};
+
+const video_providers = [_]VideoProvider{
+    .{ .pattern = "zoom.us/j/", .display = "Zoom" },
+    .{ .pattern = "meet.google.com/", .display = "Meet" },
+    .{ .pattern = "teams.microsoft.com/l/meetup-join", .display = "Teams" },
+    .{ .pattern = "whereby.com/", .display = "Whereby" },
+    .{ .pattern = "webex.com/meet", .display = "Webex" },
 };
 
 /// First https:// URL of a known video provider found in any of `haystacks`
@@ -75,10 +80,19 @@ pub fn detectVideoLink(haystacks: []const []const u8) ?[]const u8 {
         while (std.mem.indexOfPos(u8, text, search_from, "https://")) |start| {
             const link = text[start..urlEnd(text, start)];
             for (video_providers) |provider| {
-                if (std.mem.indexOf(u8, link, provider) != null) return link;
+                if (std.mem.indexOf(u8, link, provider.pattern) != null) return link;
             }
             search_from = start + "https://".len;
         }
+    }
+    return null;
+}
+
+/// Human name of the provider behind a video link ("Zoom"), for
+/// notification bodies. Null for links we don't recognize.
+pub fn videoProviderName(link: []const u8) ?[]const u8 {
+    for (video_providers) |provider| {
+        if (std.mem.indexOf(u8, link, provider.pattern) != null) return provider.display;
     }
     return null;
 }
@@ -122,6 +136,12 @@ test "video link detection: provider table" {
             try std.testing.expectEqual(@as(?[]const u8, null), got);
         }
     }
+}
+
+test "videoProviderName maps links to display names" {
+    try std.testing.expectEqualStrings("Zoom", videoProviderName("https://zoom.us/j/123").?);
+    try std.testing.expectEqualStrings("Meet", videoProviderName("https://meet.google.com/abc").?);
+    try std.testing.expectEqual(@as(?[]const u8, null), videoProviderName("https://example.com"));
 }
 
 test "video link detection: searches url, then location, then notes" {

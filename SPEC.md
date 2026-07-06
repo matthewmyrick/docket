@@ -162,6 +162,11 @@ Rules:
   thread).
 - Exactly **one mutex** in the program (snapshot swap). No other shared
   mutable state. If you feel the need for a second lock, redesign.
+- The UI thread holds that mutex from the start of a draw through the end of
+  `vx.render()` — vaxis keeps references to snapshot strings until the frame
+  is written, so the poller must not free the old arena mid-frame. Draw +
+  render is single-digit milliseconds; the poller blocking that long once a
+  minute is the simple, correct trade.
 
 ---
 
