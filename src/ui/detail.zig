@@ -124,10 +124,11 @@ fn appendWhenLine(
         }) catch return
     else blk: {
         const end = time_mod.civilFromUnix(event.end, zone);
-        const minutes = @divFloor(event.end - event.start, 60);
+        // Unsigned for {d:0>2}: zero-fill on signed ints prints "+30".
+        const minutes: u64 = @intCast(@max(@divFloor(event.end - event.start, 60), 0));
         var duration_buffer: [24]u8 = undefined;
         const duration = if (minutes >= 60)
-            std.fmt.bufPrint(&duration_buffer, "{d}h {d:0>2}m", .{ @divFloor(minutes, 60), @mod(minutes, 60) }) catch return
+            std.fmt.bufPrint(&duration_buffer, "{d}h {d:0>2}m", .{ minutes / 60, minutes % 60 }) catch return
         else
             std.fmt.bufPrint(&duration_buffer, "{d}m", .{minutes}) catch return;
         break :blk std.fmt.allocPrint(scratch, "{s} {s} {d} · {d:0>2}:{d:0>2} – {d:0>2}:{d:0>2} ({s})    [{s}]{s}", .{

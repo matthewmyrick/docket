@@ -80,6 +80,10 @@ are an error):
 | `Enter` | month → day → detail | drill down |
 | `q` / `Esc` | anywhere | back / close |
 | `/` | anywhere | fuzzy-search events (type, `↑↓`, `Enter`) |
+| `a` | anywhere | quick-add event (title, when, until) |
+| `A` | anywhere | add event — full interactive `ical add -i` |
+| `y` `n` `m` | day, detail | RSVP: accept / decline / tentative |
+| `e` | detail | edit event (interactive `ical update`) |
 | `t` | anywhere | jump to today |
 | `r` | anywhere | refresh now |
 | `o` / `c` | detail | open / copy video link or url |

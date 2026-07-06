@@ -16,6 +16,7 @@ const day_view = @import("ui/day.zig");
 const detail_view = @import("ui/detail.zig");
 const help_view = @import("ui/help.zig");
 const search_view = @import("ui/search.zig");
+const quickadd_view = @import("ui/quickadd.zig");
 const statusbar = @import("ui/statusbar.zig");
 
 const CivilDate = time_mod.CivilDate;
@@ -33,6 +34,11 @@ const scratch_size = 8 * 1024;
 
 pub const View = enum { month, day, detail };
 
+/// Commands that need the real terminal (the TUI suspends around them);
+/// main.zig owns the suspend/resume dance. The edit target id lives in
+/// App.command_id_buffer until the command runs.
+pub const Interactive = enum { add, edit };
+
 pub const App = struct {
     io: std.Io,
     zone: time_mod.Zone,
@@ -49,9 +55,24 @@ pub const App = struct {
     search_buffer: [search_view.max_query]u8 = undefined, // valid up to search_len
     search_len: usize = 0,
     search_index: usize = 0,
+    /// Quick-add form (the `a` overlay); buffers valid up to their lens.
+    quick_add_active: bool = false,
+    quick_add_field: quickadd_view.Field = .title,
+    quick_add_title: [quickadd_view.max_field]u8 = undefined,
+    quick_add_title_len: usize = 0,
+    quick_add_start: [quickadd_view.max_field]u8 = undefined,
+    quick_add_start_len: usize = 0,
+    quick_add_end: [quickadd_view.max_field]u8 = undefined,
+    quick_add_end_len: usize = 0,
+    /// One-line transient result of the last action (static strings only);
+    /// cleared on the next keypress.
+    flash: ?[]const u8 = null,
     scratch_buffer: [scratch_size]u8 = undefined, // written before every read via FixedBufferAllocator
     /// Stable copy of a link for subprocess use after the lock is dropped.
     link_buffer: [512]u8 = undefined,
+    /// Target event id for an Interactive.edit, copied out under the lock.
+    command_id_buffer: [512]u8 = undefined,
+    command_id_len: usize = 0,
 
     pub fn init(
         io: std.Io,
@@ -68,55 +89,85 @@ pub const App = struct {
         };
     }
 
-    pub fn handleKey(self: *App, key: vaxis.Key) void {
+    /// Returns a command main.zig must run with the terminal restored
+    /// (TUI suspended), or null when the key was fully handled here.
+    pub fn handleKey(self: *App, key: vaxis.Key) ?Interactive {
+        self.flash = null; // any keypress dismisses the last action result
         if (key.matches('c', .{ .ctrl = true })) {
             self.should_quit = true;
-            return;
+            return null;
         }
-        // Search consumes every key while open — typed text must not
-        // trigger bindings (a query containing "q" is not "back").
+        // Text-input overlays consume every key while open — typed text
+        // must not trigger bindings (a query containing "q" is not "back").
         if (self.search_active) {
             self.handleSearchKey(key);
-            return;
+            return null;
+        }
+        if (self.quick_add_active) {
+            self.handleQuickAddKey(key);
+            return null;
         }
         if (key.matches('Q', .{})) {
             self.should_quit = true;
-            return;
+            return null;
         }
         if (self.help_visible) {
             // Any key dismisses the overlay.
             self.help_visible = false;
-            return;
+            return null;
         }
         if (key.matches('?', .{})) {
             self.help_visible = true;
-            return;
+            return null;
         }
         if (key.matches('/', .{})) {
             self.search_active = true;
             self.search_len = 0;
             self.search_index = 0;
-            return;
+            return null;
+        }
+        if (key.matches('a', .{})) {
+            self.openQuickAdd();
+            return null;
+        }
+        if (key.matches('A', .{})) {
+            return .add; // full interactive `ical add -i`
         }
         if (key.matches('q', .{}) or key.matches(vaxis.Key.escape, .{})) {
             self.back();
-            return;
+            return null;
         }
         if (key.matches('r', .{})) {
             self.poller.wake();
-            return;
+            return null;
         }
         if (key.matches('t', .{})) {
             self.selected = time_mod.localDate(poller_mod.nowUnix(self.io), self.zone);
             self.day_index = 0;
             self.ensureWindowCovers();
-            return;
+            return null;
+        }
+        // RSVP on the selected event works from day and detail views.
+        if (self.view == .day or self.view == .detail) {
+            if (key.matches('y', .{})) {
+                self.rsvpSelected("accepted");
+                return null;
+            }
+            if (key.matches('n', .{})) {
+                self.rsvpSelected("declined");
+                return null;
+            }
+            if (key.matches('m', .{})) {
+                self.rsvpSelected("tentative");
+                return null;
+            }
         }
         switch (self.view) {
             .month => self.handleMonthKey(key),
             .day => self.handleDayKey(key),
-            .detail => self.handleDetailKey(key),
+            .detail => return self.handleDetailKey(key),
         }
+        return null;
     }
 
     /// One level up the view stack; no-op at the month view (Q quits).
@@ -221,7 +272,7 @@ pub const App = struct {
         }
     }
 
-    fn handleDetailKey(self: *App, key: vaxis.Key) void {
+    fn handleDetailKey(self: *App, key: vaxis.Key) ?Interactive {
         if (key.matches(vaxis.Key.up, .{}) or key.matches('k', .{})) {
             self.detail_scroll -|= 1;
         } else if (key.matches(vaxis.Key.down, .{}) or key.matches('j', .{})) {
@@ -230,6 +281,139 @@ pub const App = struct {
             if (self.copySelectedLink()) |link| self.openUrl(link);
         } else if (key.matches('c', .{})) {
             if (self.copySelectedLink()) |link| self.copyToClipboard(link);
+        } else if (key.matches('e', .{})) {
+            // Edit works for events you own (writable calendar); ical's own
+            // interactive UI reports anything it can't change.
+            if (self.copySelectedId() != null) return .edit;
+        }
+        return null;
+    }
+
+    /// The edit target for a pending Interactive.edit command.
+    pub fn commandId(self: *const App) []const u8 {
+        return self.command_id_buffer[0..self.command_id_len];
+    }
+
+    /// Copy the selected event's id out of the snapshot under the lock, so
+    /// subprocess argv points at stable memory.
+    fn copySelectedId(self: *App) ?[]const u8 {
+        self.lockPoller();
+        defer self.unlockPoller();
+        const event = self.selectedEventLocked() orelse return null;
+        if (event.id.len == 0 or event.id.len > self.command_id_buffer.len) return null;
+        @memcpy(self.command_id_buffer[0..event.id.len], event.id);
+        self.command_id_len = event.id.len;
+        return self.commandId();
+    }
+
+    /// Send an RSVP for the selected event via `ical rsvp`. Runs on the UI
+    /// thread — a server round-trip can take a beat, and a frozen frame
+    /// with a flash result beats concurrency machinery for a keypress.
+    fn rsvpSelected(self: *App, status: []const u8) void {
+        const id = self.copySelectedId() orelse {
+            self.flash = "no event selected";
+            return;
+        };
+        const result = std.process.run(self.poller.gpa, self.io, .{
+            .argv = &.{ "ical", "rsvp", status, id },
+        }) catch {
+            self.flash = "RSVP failed — is `ical` installed?";
+            return;
+        };
+        defer self.poller.gpa.free(result.stdout);
+        defer self.poller.gpa.free(result.stderr);
+        const ok = result.term == .exited and result.term.exited == 0;
+        self.flash = if (!ok)
+            "RSVP failed (not an invitation?)"
+        else if (std.mem.eql(u8, status, "accepted"))
+            "RSVP sent: accepted ✓"
+        else if (std.mem.eql(u8, status, "declined"))
+            "RSVP sent: declined ✗"
+        else
+            "RSVP sent: tentative ?";
+        if (ok) self.poller.wake();
+    }
+
+    fn openQuickAdd(self: *App) void {
+        self.quick_add_active = true;
+        self.quick_add_field = .title;
+        self.quick_add_title_len = 0;
+        self.quick_add_end_len = 0;
+        // Prefill the date you're standing on; type the time after it.
+        const prefill = std.fmt.bufPrint(&self.quick_add_start, "{d:0>4}-{d:0>2}-{d:0>2} ", .{
+            @as(u32, @intCast(self.selected.year)),
+            self.selected.month,
+            self.selected.day,
+        }) catch return;
+        self.quick_add_start_len = prefill.len;
+    }
+
+    fn handleQuickAddKey(self: *App, key: vaxis.Key) void {
+        if (key.matches(vaxis.Key.escape, .{})) {
+            self.quick_add_active = false;
+            return;
+        }
+        if (key.matches(vaxis.Key.tab, .{}) or key.matches(vaxis.Key.enter, .{})) {
+            if (self.quick_add_field.next()) |next_field| {
+                self.quick_add_field = next_field;
+            } else if (key.matches(vaxis.Key.enter, .{})) {
+                self.submitQuickAdd();
+            } else {
+                self.quick_add_field = .title; // Tab wraps around
+            }
+            return;
+        }
+        const buffer, const len = self.quickAddField();
+        if (key.matches(vaxis.Key.backspace, .{})) {
+            while (len.* > 0) {
+                len.* -= 1;
+                if (buffer[len.*] & 0xC0 != 0x80) break; // full UTF-8 sequence
+            }
+        } else if (key.text) |text| {
+            if (len.* + text.len <= buffer.len) {
+                @memcpy(buffer[len.*..][0..text.len], text);
+                len.* += text.len;
+            }
+        }
+    }
+
+    fn quickAddField(self: *App) struct { []u8, *usize } {
+        return switch (self.quick_add_field) {
+            .title => .{ &self.quick_add_title, &self.quick_add_title_len },
+            .start => .{ &self.quick_add_start, &self.quick_add_start_len },
+            .end => .{ &self.quick_add_end, &self.quick_add_end_len },
+        };
+    }
+
+    /// Create the event via non-interactive `ical add` — it owns date
+    /// parsing and validation; we surface pass/fail.
+    fn submitQuickAdd(self: *App) void {
+        const title = std.mem.trim(u8, self.quick_add_title[0..self.quick_add_title_len], " ");
+        const start = std.mem.trim(u8, self.quick_add_start[0..self.quick_add_start_len], " ");
+        const end = std.mem.trim(u8, self.quick_add_end[0..self.quick_add_end_len], " ");
+        if (title.len == 0 or start.len == 0) {
+            self.flash = "title and when are required";
+            return;
+        }
+        const argv: []const []const u8 = if (end.len > 0)
+            &.{ "ical", "add", title, "-s", start, "-e", end }
+        else
+            &.{ "ical", "add", title, "-s", start };
+        const result = std.process.run(self.poller.gpa, self.io, .{ .argv = argv }) catch {
+            self.flash = "create failed — is `ical` installed?";
+            return;
+        };
+        defer self.poller.gpa.free(result.stdout);
+        defer self.poller.gpa.free(result.stderr);
+        const ok = result.term == .exited and result.term.exited == 0;
+        if (ok) {
+            self.flash = "event created ✓";
+            self.quick_add_active = false;
+            self.poller.wake();
+        } else {
+            // Most common failure: ical couldn't parse the date. Keep the
+            // form open so the text can be fixed.
+            self.flash = "create failed — check the date text";
         }
     }
 
@@ -365,8 +549,17 @@ pub const App = struct {
         statusbar.draw(win, scratch, snapshot, .{
             .now = now,
             .consecutive_failures = self.poller.consecutive_failures,
+            .flash = self.flash,
         });
         if (self.help_visible) help_view.draw(win);
+        if (self.quick_add_active) {
+            quickadd_view.draw(win, scratch, .{
+                .title = self.quick_add_title[0..self.quick_add_title_len],
+                .start = self.quick_add_start[0..self.quick_add_start_len],
+                .end = self.quick_add_end[0..self.quick_add_end_len],
+                .active_field = self.quick_add_field,
+            });
+        }
         if (self.search_active) {
             const events: []const event_mod.Event = if (snapshot) |snap| snap.events else &.{};
             const result_count = search_view.draw(win, scratch, events, .{

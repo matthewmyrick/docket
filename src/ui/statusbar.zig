@@ -13,6 +13,8 @@ pub const State = struct {
     /// 0 = healthy; 1+ shows the quiet warning; at
     /// poller.failure_banner_threshold it escalates to a banner.
     consecutive_failures: u32 = 0,
+    /// Transient action result ("RSVP sent"), dismissed on next keypress.
+    flash: ?[]const u8 = null,
     hint: []const u8 = "? help",
 };
 
@@ -40,12 +42,18 @@ pub fn draw(
         x = printAt(win, x, row, "  ·  ", theme.dim);
     }
 
+    if (state.flash) |flash| {
+        x = printAt(win, x, row, flash, theme.accent);
+        x = printAt(win, x, row, "  ·  ", theme.dim);
+    }
+
     if (snapshot) |snap| {
         if (snap.nextUpcoming(state.now)) |next| {
-            const minutes = @divFloor(next.start - state.now + 59, 60);
+            // Unsigned for {d:0>2}: zero-fill on signed ints prints "+48".
+            const minutes: u64 = @intCast(@divFloor(next.start - state.now + 59, 60));
             const label = if (minutes >= 60)
                 std.fmt.allocPrint(scratch, "next: {s} in {d}h {d:0>2}m", .{
-                    next.title, @divFloor(minutes, 60), @mod(minutes, 60),
+                    next.title, minutes / 60, minutes % 60,
                 }) catch return
             else
                 std.fmt.allocPrint(scratch, "next: {s} in {d}m", .{ next.title, minutes }) catch return;
