@@ -1,5 +1,5 @@
 //! The poller thread: fetch → build snapshot → swap under the mutex →
-//! notify-scan → sleep (SPEC §4, §8). This is the only place snapshots are
+//! notify-scan → sleep (ARCHITECTURE.md §4, §8). This is the only place snapshots are
 //! created or destroyed while the app runs. The program's complete
 //! concurrency design: this one mutex plus one wake event.
 //!
@@ -16,10 +16,10 @@ const notifier_mod = @import("notify/notifier.zig");
 const Snapshot = snapshot_mod.Snapshot;
 
 /// Consecutive failures before the UI escalates from a status-bar warning
-/// to a prominent banner (SPEC §8).
+/// to a prominent banner (ARCHITECTURE.md §8).
 pub const failure_banner_threshold: u32 = 5;
 
-/// Default fetch window relative to now (SPEC §5): covers the month grid
+/// Default fetch window relative to now (ARCHITECTURE.md §5): covers the month grid
 /// plus the notification horizon.
 const default_back_days: i64 = 8;
 const default_forward_days: i64 = 62;
@@ -72,7 +72,7 @@ pub const Poller = struct {
     }
 
     /// One poll: fetch, swap, notify. Failures keep the previous snapshot
-    /// and bump the failure counter (SPEC §8 failure policy).
+    /// and bump the failure counter (ARCHITECTURE.md §8 failure policy).
     fn cycle(self: *Poller) void {
         const now = nowUnix(self.io);
 

@@ -1,4 +1,4 @@
-//! Notification decisions and the persistent dedup log (SPEC §9). The
+//! Notification decisions and the persistent dedup log (ARCHITECTURE.md §9). The
 //! decision logic (`pendingKey`) is pure and table-tested; the I/O edge is
 //! the append-only, flock-coordinated log that lets the TUI and daemon run
 //! simultaneously without double-firing.
@@ -216,7 +216,7 @@ fn dedupKey(buffer: *[max_key_bytes]u8, event: Event, lead_minutes: u32) ?[]cons
 
 /// Fire window for a timed event: [start - lead, start). Computed from
 /// absolute event times so wall-clock jumps (sleep/wake) can't repeat or
-/// skip based on tick counting (SPEC §8).
+/// skip based on tick counting (ARCHITECTURE.md §8).
 fn withinLeadWindow(start: i64, lead_minutes: u32, now: i64) bool {
     const lead_seconds = @as(i64, lead_minutes) * 60;
     return now >= start - lead_seconds and now < start;

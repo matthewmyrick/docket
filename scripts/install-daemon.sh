@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Install the notification daemon under launchd (SPEC §10):
+# Install the notification daemon under launchd (ARCHITECTURE.md §10):
 # build ReleaseSafe, copy the binary to ~/.local/bin, render the plist into
 # ~/Library/LaunchAgents, and bootstrap it. Re-running updates in place.
 set -euo pipefail

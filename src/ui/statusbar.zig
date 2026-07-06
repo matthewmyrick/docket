@@ -1,5 +1,5 @@
 //! The persistent bottom status bar: next-event countdown, refresh age,
-//! fetch problems (SPEC §7a, §8). Formatted text lives in the caller's
+//! fetch problems (ARCHITECTURE.md §7a, §8). Formatted text lives in the caller's
 //! per-frame scratch (vaxis references it until render).
 
 const std = @import("std");

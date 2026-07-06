@@ -1,6 +1,6 @@
 //! Integration smoke tests (`zig build itest` — NOT part of `zig build
 //! test`). Requires a machine with calendar access granted and the `ical`
-//! CLI installed; compares the two calendar sources end to end (SPEC §15
+//! CLI installed; compares the two calendar sources end to end (ARCHITECTURE.md §15
 //! M4 acceptance).
 
 const std = @import("std");

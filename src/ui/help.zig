@@ -1,5 +1,5 @@
 //! Help overlay: a centered floating box listing every key binding
-//! (SPEC §7d). Data-driven rows so the table and the actual bindings are
+//! (ARCHITECTURE.md §7d). Data-driven rows so the table and the actual bindings are
 //! reviewed side by side.
 
 const std = @import("std");

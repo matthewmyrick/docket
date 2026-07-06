@@ -1,5 +1,5 @@
 //! Event detail view: everything we know about one event, scrollable
-//! (SPEC §7c). Content rows are built into the per-frame scratch, then a
+//! (ARCHITECTURE.md §7c). Content rows are built into the per-frame scratch, then a
 //! scroll window of them is drawn.
 
 const std = @import("std");

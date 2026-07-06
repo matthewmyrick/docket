@@ -1,5 +1,5 @@
 //! Catppuccin Mocha palette and the app's semantic styles. The one place hex
-//! values live (SPEC §7e). Default background is the terminal's own —
+//! values live (ARCHITECTURE.md §7e). Default background is the terminal's own —
 //! transparency-friendly, no painted bg.
 
 const vaxis = @import("vaxis");

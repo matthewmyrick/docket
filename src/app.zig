@@ -23,7 +23,7 @@ const CivilDate = time_mod.CivilDate;
 const Snapshot = snapshot_mod.Snapshot;
 
 /// Fetch window relative to the viewed month when navigation leaves the
-/// loaded range (SPEC §5).
+/// loaded range (ARCHITECTURE.md §5).
 const window_back_days: i64 = 8;
 const window_forward_days: i64 = 62;
 

@@ -10,7 +10,7 @@
  * Memory: buffers returned through out-parameters are malloc'd copies owned
  * by the caller; free them with ek_free (and nothing else). The shim keeps
  * one process-lifetime EKEventStore internally (creating one per fetch is
- * slow and re-prompts on some macOS versions — SPEC §5b).
+ * slow and re-prompts on some macOS versions — ARCHITECTURE.md §5b).
  */
 
 #ifndef ICAL_CALENDAR_TUI_EVENTKIT_SHIM_H
@@ -36,7 +36,7 @@ int ek_request_access(void);
 /*
  * Fetch all events in [from_unix, to_unix] as a UTF-8 JSON array using the
  * same field names as `ical -o json` (one parser on the Zig side, two
- * sources — SPEC §5b), plus "calendar_color": "#RRGGBB" per event.
+ * sources — ARCHITECTURE.md §5b), plus "calendar_color": "#RRGGBB" per event.
  *
  * On EK_OK, "json_utf8" and "len" hold a malloc'd buffer (not
  * NUL-terminated) that the caller must release with ek_free. On error they

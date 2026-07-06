@@ -1,5 +1,5 @@
 //! Notification sinks: herdr → terminal-notifier → osascript, auto-detected
-//! in that priority order (SPEC §9). A failing sink falls through to the
+//! in that priority order (ARCHITECTURE.md §9). A failing sink falls through to the
 //! next; delivery is best-effort and never takes the app down.
 
 const std = @import("std");
@@ -36,7 +36,7 @@ pub fn detect(
 }
 
 /// Deliver one notification. Tries `sink` first, then falls through the
-/// remaining priority order (SPEC §9 / CONTRIBUTING §5). Failures are
+/// remaining priority order (ARCHITECTURE.md §9 / CONTRIBUTING §5). Failures are
 /// swallowed — the caller has already dedup-logged, and a missed toast must
 /// not crash a calendar.
 pub fn send(

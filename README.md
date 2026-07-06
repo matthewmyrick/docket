@@ -5,13 +5,13 @@ Calendar.app sees: iCloud, Google, Exchange), navigable month/day/event views,
 background polling, and meeting notifications (Notification Center or herdr
 toasts). Catppuccin, keyboard-driven, memory-frugal.
 
-> **Status: v1 feature-complete** (milestones M0–M5 landed; see SPEC §15).
+> **Status: v1 feature-complete** (milestones M0–M5 landed; see ARCHITECTURE.md §15).
 
 ## Documents
 
 | Doc | What |
 |---|---|
-| [`SPEC.md`](SPEC.md) | Complete build specification — architecture, TUI design, data sources, notifications, milestones. **Start here.** |
+| [`ARCHITECTURE.md`](ARCHITECTURE.md) | Design: threading, data sources, memory rules, notifications, TCC. **Start here before changing code.** |
 | [`CODING_STANDARDS.md`](CODING_STANDARDS.md) | Binding Zig standards: memory/allocator rules, errors, interop, testing. |
 | [`CONTRIBUTING.md`](CONTRIBUTING.md) | Setup, commands, workflow, pre-commit checklist. |
 
@@ -92,7 +92,7 @@ are an error):
 
 ## Toolchain
 
-Pinned at milestone 0 (see SPEC §3):
+Pinned at milestone 0 (see ARCHITECTURE.md §3):
 
 | Tool | Version | Source |
 |---|---|---|
@@ -106,10 +106,21 @@ Native EventKit shim landed at milestone 4 (`source: eventkit`, with
 ## Memory
 
 Measured idle RSS, ReleaseSafe, 45-day window (recorded per release —
-SPEC §12): **~21 MB** with the native EventKit source (≈10 MB of that is
+ARCHITECTURE.md §12): **~21 MB** with the native EventKit source (≈10 MB of that is
 EventKit/AppKit framework-resident pages), **~11 MB** with the `ical_cli`
 source. App-controlled memory is arena-bounded and flat over uptime.
 
 macOS permission note: TCC ties the calendar grant to the binary's identity;
 after rebuilding you may need to re-grant. Reset for testing with
 `tccutil reset Calendar dev.matthewmyrick.ical-calendar-tui`.
+
+## Contributing
+
+PRs welcome — start with [`CONTRIBUTING.md`](CONTRIBUTING.md) (workflow,
+gates) and [`ARCHITECTURE.md`](ARCHITECTURE.md) (the invariants your change
+must keep). For anything sizeable, open an issue first. Maintained by
+[@matthewmyrick](https://github.com/matthewmyrick).
+
+## License
+
+[MIT](LICENSE)

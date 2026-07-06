@@ -1,5 +1,5 @@
 //! Month view: the calendar grid with event dots/titles, plus the
-//! selected-day peek (SPEC §7a). The grid is responsive: cells grow with the
+//! selected-day peek (ARCHITECTURE.md §7a). The grid is responsive: cells grow with the
 //! terminal, the grid centers horizontally, and wide cells show event titles
 //! in place of dots. Formatted strings go into the caller's per-frame
 //! scratch allocator — vaxis keeps references to printed text until render
@@ -151,7 +151,7 @@ fn drawGrid(
 }
 
 /// The shared grid: one line between neighboring cells, junction glyphs at
-/// crossings (SPEC §7a).
+/// crossings (ARCHITECTURE.md §7a).
 fn drawGridLines(win: vaxis.Window, layout: Layout) void {
     const top = rows_above_grid;
     const right_edge = layout.left + layout.cell_width * 7;

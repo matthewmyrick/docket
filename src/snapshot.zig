@@ -1,6 +1,6 @@
 //! Immutable snapshot of calendar data plus the arena that owns every byte
 //! of it. Built fresh per fetch, published by pointer swap, freed wholesale
-//! (SPEC §4, §12). Nothing inside a snapshot is ever freed individually.
+//! (ARCHITECTURE.md §4, §12). Nothing inside a snapshot is ever freed individually.
 
 const std = @import("std");
 const event_mod = @import("calendar/event.zig");
@@ -9,7 +9,7 @@ const time_mod = @import("calendar/time.zig");
 
 const Event = event_mod.Event;
 
-/// Snapshot-build-time filtering (SPEC §11): sources always fetch
+/// Snapshot-build-time filtering (ARCHITECTURE.md §11): sources always fetch
 /// everything; exclusions apply here so both sources stay simple.
 pub const Filter = struct {
     calendars_exclude: []const []const u8 = &.{},

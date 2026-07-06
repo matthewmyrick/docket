@@ -12,7 +12,7 @@
 
 #include "eventkit_shim.h"
 
-/* One store for the process lifetime (SPEC §5b): creating one per fetch is
+/* One store for the process lifetime (ARCHITECTURE.md §5b): creating one per fetch is
  * slow and re-prompts on some macOS versions. Guarded by dispatch_once. */
 static EKEventStore *shared_store(void) {
     static EKEventStore *store = nil;
@@ -161,7 +161,7 @@ int ek_fetch_events(double from_unix, double to_unix, char **json_utf8,
                     name.length > 0 ? name : participant_email(organizer);
             }
 
-            /* Your own RSVP, event-level (SPEC §6 self_rsvp). */
+            /* Your own RSVP, event-level (ARCHITECTURE.md §6 self_rsvp). */
             NSString *self_status = @"";
             NSMutableArray<NSDictionary *> *attendees = [NSMutableArray array];
             for (EKParticipant *participant in event.attendees) {

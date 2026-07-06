@@ -1,10 +1,16 @@
 # Contributing — ical-calendar-tui
 
-Solo-owner repo (Matt), frequently worked on by AI agents. This file is the
-operating manual: how to set up, build, verify, and commit. The design lives
-in [`SPEC.md`](SPEC.md); the code rules live in
-[`CODING_STANDARDS.md`](CODING_STANDARDS.md) — both are binding, read them
-first.
+Contributions welcome! Maintainer: [@matthewmyrick](https://github.com/matthewmyrick).
+This file is the operating manual: how to set up, build, verify, and get a
+change merged. The design lives in [`ARCHITECTURE.md`](ARCHITECTURE.md); the
+code rules live in [`CODING_STANDARDS.md`](CODING_STANDARDS.md) — both are
+binding, read them before writing code. Licensed MIT; by contributing you
+agree your work is too.
+
+**Before starting anything sizeable, open an issue.** Especially anything
+touching threading (§4), memory ownership (§12), or the ObjC shim (§5b) —
+those have one-mutex/one-arena invariants that PRs must not erode, and it's
+better to align before you've written the code.
 
 ---
 
@@ -42,11 +48,12 @@ reset while testing: `tccutil reset Calendar dev.matthewmyrick.ical-calendar-tui
 
 ## 3. Workflow
 
-- **Branching:** commit straight to `main`. No PRs, no feature branches,
-  unless Matt explicitly asks for one.
-- **Small, focused commits.** One logical change per commit. Scaffold, a
-  view, the poller, a bugfix — each its own commit. Never bundle an
-  unrelated tweak into a feature commit; split it.
+- **Contributors: fork → branch → PR against `main`.** `main` is protected;
+  CI (fmt + tests + release build) must pass and the maintainer reviews
+  everything (CODEOWNERS). The maintainer may push directly.
+- **One logical change per PR**, and small, focused commits within it. A
+  view, a bugfix, a provider row — each its own change. Never bundle an
+  unrelated tweak into a feature PR; split it.
 - **Commit messages are non-negotiable quality.** Imperative subject
   ≤ ~50 chars saying what changed *and* the point of it; a body whenever the
   change isn't self-explanatory (the *why*, the tradeoff, the verification).
@@ -61,12 +68,12 @@ reset while testing: `tccutil reset Calendar dev.matthewmyrick.ical-calendar-tui
   200 poll cycles.
   ```
 
-- **Milestones** (SPEC §15) land in order. Don't start M(n+1) while M(n)'s
-  acceptance checks are failing.
+- **Merging to main auto-releases** (see §6) — the maintainer controls the
+  version bump via markers in the merge commit.
 
-## 4. Pre-commit checklist
+## 4. Pre-PR checklist
 
-Every commit, no exceptions:
+Every PR, no exceptions (this is also the PR template):
 
 1. `zig fmt --check .` — clean.
 2. `zig build test` — green, zero leaks reported.
@@ -75,7 +82,7 @@ Every commit, no exceptions:
    cursor visible). TUI regressions hide here.
 4. If you touched the poller/notifier: run once with a test event ~2 minutes
    out and watch a notification fire exactly once.
-5. If behavior now differs from `SPEC.md`: update the spec in the same commit.
+5. If behavior now differs from `ARCHITECTURE.md`: update the spec in the same commit.
 6. Secrets check: this repo must contain no calendar data. Never commit real
    event dumps — `testdata/` fixtures are scrubbed/synthetic (fake names,
    fake emails, fake meeting URLs).
@@ -92,7 +99,7 @@ Every commit, no exceptions:
 ### Adding a notification sink
 1. New variant in `src/notify/sink.zig`'s tagged union with `detect()` and
    `send(title, body, url)`.
-2. Slot it into the priority order in SPEC §9 and update the config enum.
+2. Slot it into the priority order in ARCHITECTURE.md §9 and update the config enum.
 3. Failure of a sink must fall through to the next sink, logged, non-fatal.
 
 ### Adding a video-call provider
@@ -122,15 +129,19 @@ Zig wrapper, and `ek_free` semantics together — the header is the contract.
   x86_64 cross-compilation is blocked on Apple SDK header quirks in the
   ObjC shim (search "sysroot" in build.zig).
 - Release builds: `ReleaseSafe`. Record measured idle RSS in the README per
-  release (a tracked number, not a vibe — see SPEC §12 for current values).
+  release (a tracked number, not a vibe — see ARCHITECTURE.md §12 for current values).
 - CI (`.github/workflows/ci.yml`) runs fmt + tests + a ReleaseSafe compile
   on every push to main.
 
-## 7. Agent-to-agent notes
+## 7. Design tiebreakers
 
-- If you find the spec ambiguous, resolve it in favor of: simpler memory
-  story > simpler concurrency story > fewer dependencies > prettier UI.
+Humans and AI agents both work on this repo; when a design question is
+ambiguous, resolve it in favor of: **simpler memory story > simpler
+concurrency story > fewer dependencies > prettier UI**. Other norms:
+
 - Leave breadcrumbs: non-obvious decisions get a sentence in the commit body,
   not a TODO comment.
-- `TODO` comments must reference an issue or a SPEC section; orphan TODOs are
-  deleted.
+- `TODO` comments must reference an issue or an ARCHITECTURE.md section;
+  orphan TODOs are deleted.
+- Writes to calendars go through the `ical` CLI, never the EventKit shim —
+  a bug in this app must not be able to corrupt a calendar store.

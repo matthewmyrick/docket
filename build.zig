@@ -72,7 +72,7 @@ pub fn build(b: *std.Build) void {
     itest_step.dependOn(&run_itests.step);
 }
 
-/// The EventKit shim (the only ObjC in the project, SPEC §2) plus the test
+/// The EventKit shim (the only ObjC in the project, ARCHITECTURE.md §2) plus the test
 /// fixtures that live outside src/ — shared by the exe and itest modules.
 fn addNativeBits(b: *std.Build, module: *std.Build.Module) void {
     module.addAnonymousImport("ical-list-sample.json", .{

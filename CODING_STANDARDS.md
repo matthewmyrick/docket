@@ -126,10 +126,10 @@ Follow the Zig standard library conventions exactly:
 
 - **Two threads, one mutex, one wake event.** UI thread + poller thread; the
   mutex guards the snapshot pointer (held by the UI across draw+render, see
-  SPEC §4); an `std.Io.Event` with `waitTimeout` wakes the poller early for
+  ARCHITECTURE.md §4); an `std.Io.Event` with `waitTimeout` wakes the poller early for
   manual refresh / shutdown (Zig 0.16's `std.Io` has no condvar `timedWait`;
   the Event is the idiomatic equivalent). That is the complete concurrency
-  design. Any addition requires updating SPEC §4 first.
+  design. Any addition requires updating ARCHITECTURE.md §4 first.
 - Data crossing threads is **immutable after publish** (the snapshot). No
   atomics-as-cleverness; no lock-free anything.
 - Shutdown is orderly: set `should_quit`, signal condvar, `join` the poller,
@@ -160,9 +160,9 @@ Follow the Zig standard library conventions exactly:
 - `///` doc comments on every `pub` decl — contract, ownership, thread
   expectations if relevant.
 - Comments explain **constraints and why**, not what the next line does.
-  `// EKEventStore must outlive all fetches — see SPEC §5b` is good;
+  `// EKEventStore must outlive all fetches — see ARCHITECTURE.md §5b` is good;
   `// increment i` is deleted on sight.
-- When behavior diverges from SPEC.md, update SPEC.md in the same commit.
+- When behavior diverges from ARCHITECTURE.md, update ARCHITECTURE.md in the same commit.
 
 ## 11. Zig idiom quick-list
 

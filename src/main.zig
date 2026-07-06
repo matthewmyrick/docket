@@ -25,7 +25,7 @@ pub const std_options: std.Options = .{
 };
 
 /// Info.plist embedded into the executable so TCC finds the calendar usage
-/// description in a bare (non-bundled) binary — SPEC §13, minus the
+/// description in a bare (non-bundled) binary — ARCHITECTURE.md §13, minus the
 /// -sectcreate linker flag (0.16's linker driver has no passthrough; an
 /// exported linksection constant produces the identical section).
 export const info_plist: [info_plist_bytes.len]u8 linksection("__TEXT,__info_plist") = info_plist_bytes.*;
@@ -99,7 +99,7 @@ pub fn main(init: std.process.Init) !void {
     var zone = time_mod.Zone.loadLocal(gpa, io);
     defer zone.deinit();
 
-    // Source selection (SPEC §5): .auto tries EventKit and falls back to
+    // Source selection (ARCHITECTURE.md §5): .auto tries EventKit and falls back to
     // the CLI; the access request may show the TCC prompt — before the TUI
     // takes the terminal, so the dialog isn't hidden behind an alt screen.
     var source: source_mod.CalendarSource = switch (config.source) {
@@ -267,7 +267,7 @@ fn runInteractive(
     app.poller.wake(); // pick up whatever the command changed
 }
 
-/// --agenda: print today's events as plain text and exit 0 (SPEC §10) —
+/// --agenda: print today's events as plain text and exit 0 (ARCHITECTURE.md §10) —
 /// for scripts, herdr launchers, and shell greetings.
 fn runAgenda(
     gpa: std.mem.Allocator,

@@ -1,5 +1,5 @@
 //! The calendar-source interface: a tagged union over the concrete sources
-//! (SPEC §5 — exactly two variants ever, ical_cli now and eventkit at M4;
+//! (ARCHITECTURE.md §5 — exactly two variants ever, ical_cli now and eventkit at M4;
 //! a tagged union beats a vtable for two variants, CODING_STANDARDS §6).
 
 const std = @import("std");

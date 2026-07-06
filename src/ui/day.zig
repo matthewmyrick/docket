@@ -1,5 +1,5 @@
 //! Day view: a chronological agenda for one day with per-event selection
-//! (SPEC §7b). All-day events lead, the RSVP glyph shows YOUR status.
+//! (ARCHITECTURE.md §7b). All-day events lead, the RSVP glyph shows YOUR status.
 
 const std = @import("std");
 const vaxis = @import("vaxis");
