@@ -21,6 +21,7 @@ on:
       - "testdata/**"
       - "build.zig"
       - "build.zig.zon"
+      - ".zigversion"
       - ".github/workflows/release.yml"
 
 # Serialize releases so concurrent merges can't compute the same next tag.
