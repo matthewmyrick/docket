@@ -1,20 +1,28 @@
-//! Entry point: config, poller thread, vaxis wiring, and orderly shutdown
-//! (CODING_STANDARDS §8): quit → stop poller → join → deinit vaxis
-//! (restoring the terminal) → free arenas. --daemon/--agenda land at M5.
+//! Entry point: argument parsing (--daemon/--agenda), shared setup (config,
+//! timezone, source selection), and the three run modes. Shutdown is
+//! orderly (CODING_STANDARDS §8): quit → stop poller → join → deinit vaxis
+//! (restoring the terminal) → free arenas.
 
 const std = @import("std");
 const vaxis = @import("vaxis");
 
 const app_mod = @import("app.zig");
 const config_mod = @import("config.zig");
+const log_mod = @import("log.zig");
 const poller_mod = @import("poller.zig");
 const notifier_mod = @import("notify/notifier.zig");
 const sink_mod = @import("notify/sink.zig");
+const snapshot_mod = @import("snapshot.zig");
 const source_mod = @import("calendar/source.zig");
 const eventkit_mod = @import("calendar/eventkit.zig");
 const time_mod = @import("calendar/time.zig");
 
 pub const panic = vaxis.panic_handler;
+
+pub const std_options: std.Options = .{
+    .logFn = log_mod.logFn,
+    .log_level = .debug, // runtime-filtered in log.zig
+};
 
 /// Info.plist embedded into the executable so TCC finds the calendar usage
 /// description in a bare (non-bundled) binary — SPEC §13, minus the
@@ -29,9 +37,41 @@ const Event = union(enum) {
     snapshot_updated,
 };
 
+const Mode = enum { tui, daemon, agenda };
+
+const usage =
+    \\usage: ical-calendar-tui [--daemon | --agenda]
+    \\
+    \\  (no flags)  interactive calendar TUI
+    \\  --daemon    headless poll + notify (for launchd)
+    \\  --agenda    print today's events and exit
+    \\
+;
+
 pub fn main(init: std.process.Init) !void {
     const io = init.io;
     const gpa = init.gpa;
+
+    var args = std.process.Args.Iterator.init(init.minimal.args);
+    _ = args.next(); // argv[0]
+    var mode: Mode = .tui;
+    while (args.next()) |arg| {
+        if (std.mem.eql(u8, arg, "--daemon")) {
+            mode = .daemon;
+        } else if (std.mem.eql(u8, arg, "--agenda")) {
+            mode = .agenda;
+        } else if (std.mem.eql(u8, arg, "--help") or std.mem.eql(u8, arg, "-h")) {
+            return writeStderr(io, usage);
+        } else {
+            writeStderr(io, usage);
+            return error.UnknownArgument;
+        }
+    }
+
+    if (mode != .tui) {
+        log_mod.mode = .stderr;
+        if (init.environ_map.get("ICAL_TUI_DEBUG") != null) log_mod.min_level = .debug;
+    }
 
     // Config + paths live in one arena for the process lifetime.
     var config_arena = std.heap.ArenaAllocator.init(gpa);
@@ -74,6 +114,13 @@ pub fn main(init: std.process.Init) !void {
         },
     };
 
+    const filter: snapshot_mod.Filter = .{
+        .calendars_exclude = config.calendars_exclude,
+        .show_declined = config.show_declined,
+    };
+
+    if (mode == .agenda) return runAgenda(gpa, io, &source, zone, filter);
+
     const sink = sink_mod.detect(gpa, io, init.environ_map, config.notify_sink);
     var notifier = try notifier_mod.Notifier.init(
         gpa,
@@ -93,13 +140,27 @@ pub fn main(init: std.process.Init) !void {
         .notifier = &notifier,
         .zone = zone,
         .poll_interval_seconds = config.poll_interval_seconds,
-        .filter = .{
-            .calendars_exclude = config.calendars_exclude,
-            .show_declined = config.show_declined,
-        },
+        .filter = filter,
     };
 
-    var app = app_mod.App.init(io, zone, &poller, config.week_start);
+    switch (mode) {
+        // Daemon: the poller loop IS the program; launchd terminates it.
+        .daemon => poller.run(),
+        .tui => try runTui(init, &poller, zone, config.week_start),
+        .agenda => unreachable, // returned above
+    }
+}
+
+fn runTui(
+    init: std.process.Init,
+    poller: *poller_mod.Poller,
+    zone: time_mod.Zone,
+    week_start: config_mod.WeekStart,
+) !void {
+    const io = init.io;
+    const gpa = init.gpa;
+
+    var app = app_mod.App.init(io, zone, poller, week_start);
 
     var tty_buffer: [4096]u8 = undefined;
     var tty: vaxis.Tty = try .init(io, &tty_buffer);
@@ -116,7 +177,7 @@ pub fn main(init: std.process.Init) !void {
     // countdowns and fresh data without polling on its own.
     poller.on_cycle = postSnapshotUpdated;
     poller.on_cycle_context = &loop;
-    var poller_future = try io.concurrent(poller_mod.Poller.run, .{&poller});
+    var poller_future = try io.concurrent(poller_mod.Poller.run, .{poller});
     // Stop the poller before the loop/vaxis defers unwind (LIFO).
     defer {
         poller.stop();
@@ -141,6 +202,56 @@ pub fn main(init: std.process.Init) !void {
         app.draw(vx.window());
         try vx.render(tty.writer());
     }
+}
+
+/// --agenda: print today's events as plain text and exit 0 (SPEC §10) —
+/// for scripts, herdr launchers, and shell greetings.
+fn runAgenda(
+    gpa: std.mem.Allocator,
+    io: std.Io,
+    source: *source_mod.CalendarSource,
+    zone: time_mod.Zone,
+    filter: snapshot_mod.Filter,
+) !void {
+    const now = poller_mod.nowUnix(io);
+    const today = time_mod.localDate(now, zone);
+    const bounds = time_mod.dayBounds(today, zone);
+
+    const snapshot = snapshot_mod.Snapshot.build(gpa, source, bounds.start, bounds.end, now, filter) catch |err| {
+        var message: [128]u8 = undefined;
+        return fail(io, std.fmt.bufPrint(&message, "calendar fetch failed: {t}", .{err}) catch "calendar fetch failed");
+    };
+    defer snapshot.deinit();
+
+    var out_buffer: [4096]u8 = undefined;
+    const stdout = std.Io.File.stdout();
+    var file_writer = stdout.writer(io, &out_buffer);
+    const writer = &file_writer.interface;
+
+    if (snapshot.events.len == 0) {
+        try writer.writeAll("no events today\n");
+        try writer.flush();
+        return;
+    }
+    for (snapshot.events) |event| {
+        if (event.all_day) {
+            try writer.print("all-day      {s}  [{s}]\n", .{ event.title, event.calendar_name });
+        } else {
+            const start = time_mod.civilFromUnix(event.start, zone);
+            const end = time_mod.civilFromUnix(event.end, zone);
+            try writer.print("{d:0>2}:{d:0>2}–{d:0>2}:{d:0>2}  {s}  [{s}]\n", .{
+                start.time.hour, start.time.minute,
+                end.time.hour,   end.time.minute,
+                event.title,     event.calendar_name,
+            });
+        }
+    }
+    try writer.flush();
+}
+
+fn writeStderr(io: std.Io, message: []const u8) void {
+    const stderr = std.Io.File.stderr();
+    stderr.writeStreamingAll(io, message) catch {};
 }
 
 fn postSnapshotUpdated(context: *anyopaque) void {
@@ -173,15 +284,15 @@ fn resolvePaths(arena: std.mem.Allocator, environ_map: *std.process.Environ.Map)
 /// Print a startup problem to stderr and exit nonzero. Only used before the
 /// TUI takes the terminal.
 fn fail(io: std.Io, message: []const u8) error{StartupFailed} {
-    const stderr = std.Io.File.stderr();
-    stderr.writeStreamingAll(io, message) catch {};
-    stderr.writeStreamingAll(io, "\n") catch {};
+    writeStderr(io, message);
+    writeStderr(io, "\n");
     return error.StartupFailed;
 }
 
 test {
     _ = @import("app.zig");
     _ = @import("config.zig");
+    _ = @import("log.zig");
     _ = @import("poller.zig");
     _ = @import("snapshot.zig");
     _ = @import("calendar/event.zig");

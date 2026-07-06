@@ -81,10 +81,12 @@ pub const Poller = struct {
         const to = self.requested_to orelse defaultTo(now, self.zone);
         self.mutex.unlock(self.io);
 
-        const fresh = Snapshot.build(self.gpa, self.source, from, to, now, self.filter) catch {
+        const fresh = Snapshot.build(self.gpa, self.source, from, to, now, self.filter) catch |err| {
             self.mutex.lockUncancelable(self.io);
             self.consecutive_failures += 1;
+            const failures = self.consecutive_failures;
             self.mutex.unlock(self.io);
+            std.log.debug("poll failed ({t}), {d} consecutive; keeping cached snapshot", .{ err, failures });
             self.notifyUi();
             return;
         };
@@ -98,6 +100,7 @@ pub const Poller = struct {
         // pointer, so nobody can still reference `retired` here.
         if (retired) |old| old.deinit();
 
+        std.log.debug("poll ok: {d} events in window", .{fresh.events.len});
         self.notifyUi();
         self.notifier.scan(fresh.events, now, self.zone);
     }

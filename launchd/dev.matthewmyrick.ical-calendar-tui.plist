@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Template: __HOME__ is replaced by scripts/install-daemon.sh -->
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>dev.matthewmyrick.ical-calendar-tui</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>__HOME__/.local/bin/ical-calendar-tui</string>
+		<string>--daemon</string>
+	</array>
+	<key>RunAtLoad</key>
+	<true/>
+	<key>KeepAlive</key>
+	<true/>
+	<key>StandardErrorPath</key>
+	<string>__HOME__/Library/Logs/ical-calendar-tui.log</string>
+	<key>ProcessType</key>
+	<string>Background</string>
+</dict>
+</plist>

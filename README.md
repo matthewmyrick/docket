@@ -5,8 +5,7 @@ Calendar.app sees: iCloud, Google, Exchange), navigable month/day/event views,
 background polling, and meeting notifications (Notification Center or herdr
 toasts). Catppuccin, keyboard-driven, memory-frugal.
 
-> **Status: pre-implementation.** The full build spec is written; code lands
-> milestone by milestone.
+> **Status: v1 feature-complete** (milestones M0–M5 landed; see SPEC §15).
 
 ## Documents
 
@@ -16,12 +15,39 @@ toasts). Catppuccin, keyboard-driven, memory-frugal.
 | [`CODING_STANDARDS.md`](CODING_STANDARDS.md) | Binding Zig standards: memory/allocator rules, errors, interop, testing. |
 | [`CONTRIBUTING.md`](CONTRIBUTING.md) | Setup, commands, workflow, pre-commit checklist. |
 
-## Planned usage
+## Usage
 
 ```bash
 ical-calendar-tui              # the TUI: arrows move days, Enter drills in
 ical-calendar-tui --daemon     # headless poll + notify (launchd)
 ical-calendar-tui --agenda     # print today's events and exit
+```
+
+Install the notification daemon (runs at login, survives the TUI closing):
+
+```bash
+scripts/install-daemon.sh      # builds ReleaseSafe, installs launchd agent
+```
+
+Logs land in `~/Library/Logs/ical-calendar-tui.log`; set `ICAL_TUI_DEBUG=1`
+for per-cycle lines.
+
+## Configuration
+
+`~/.config/ical-calendar-tui/config.zon` (all keys optional; unknown keys
+are an error):
+
+```zon
+.{
+    .poll_interval_seconds = 60,        // clamped to [15, 3600]
+    .source = .auto,                    // .auto | .eventkit | .ical_cli
+    .lead_times_minutes = .{ 10, 1 },
+    .all_day_notify_at = null,          // e.g. "09:00"
+    .notify_sink = .auto,               // .auto | .herdr | .terminal_notifier | .osascript | .none
+    .week_start = .monday,              // .monday | .sunday
+    .calendars_exclude = .{},           // e.g. .{ "Birthdays", "Siri Suggestions" }
+    .show_declined = false,
+}
 ```
 
 ## Keys
