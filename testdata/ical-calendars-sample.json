@@ -1,0 +1,5 @@
+[
+  { "id": "WORK-CAL-0000-0000", "title": "Work", "type": 0, "color": "#0088FF", "source": "Default", "readOnly": false },
+  { "id": "PERSONAL-CAL-0000", "title": "Personal", "type": 0, "color": "#30D158", "source": "Default", "readOnly": false },
+  { "id": "HOLIDAY-CAL-0000", "title": "US Holidays", "type": 3, "color": "#CB30E0", "source": "Subscribed Calendars", "readOnly": true }
+]

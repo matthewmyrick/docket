@@ -261,8 +261,14 @@ pub const Event = struct {
     video_link: []const u8,  // derived — see below
     attendees: []Attendee,
     is_recurring: bool,
+    self_rsvp: Rsvp,         // YOUR rsvp, event-level — see note below
 };
 ```
+
+- `self_rsvp`: both sources report your own RSVP at event level (`ical`'s
+  `self_status` string, EventKit's current-user participant). The CLI source
+  cannot identify which attendee is "you", so `Attendee.is_self` stays false
+  there and UI code showing "your RSVP" reads `self_rsvp` instead.
 
 - **All strings are slices into the snapshot arena.** No individual frees.
 - `video_link` derivation (in Zig, shared by both sources): scan `url`,

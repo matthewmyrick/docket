@@ -20,6 +20,13 @@ pub fn build(b: *std.Build) void {
             },
         }),
     });
+    // Test fixtures live outside src/, so @embedFile reaches them as imports.
+    exe.root_module.addAnonymousImport("ical-list-sample.json", .{
+        .root_source_file = b.path("testdata/ical-list-sample.json"),
+    });
+    exe.root_module.addAnonymousImport("ical-calendars-sample.json", .{
+        .root_source_file = b.path("testdata/ical-calendars-sample.json"),
+    });
     b.installArtifact(exe);
 
     const run_step = b.step("run", "Run the TUI");
