@@ -1,0 +1,56 @@
+# Tag push v* -> build, package, publish a GitHub Release.
+# Cut releases with scripts/release.sh, which tags only after local gates
+# pass and verifies the tag matches build.zig.zon's version.
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write # create the release + upload assets
+
+jobs:
+  release:
+    runs-on: macos-15 # arm64-only for now; x86_64 cross-compile is blocked
+    # on SDK header quirks in the ObjC shim (see build.zig sysroot note)
+    steps:
+      - uses: actions/checkout@v4
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: 0.16.0 # keep in lockstep with .zigversion
+
+      - name: tag matches build.zig.zon version
+        run: |
+          ZON_VERSION=$(sed -n 's/.*\.version = "\(.*\)".*/\1/p' build.zig.zon | head -1)
+          if [ "v$ZON_VERSION" != "$GITHUB_REF_NAME" ]; then
+            echo "tag $GITHUB_REF_NAME != build.zig.zon version v$ZON_VERSION" >&2
+            exit 1
+          fi
+
+      - name: gates
+        run: |
+          zig fmt --check .
+          zig build test --summary all
+
+      - name: build (ReleaseSafe, arm64)
+        run: zig build -Doptimize=ReleaseSafe
+
+      - name: package
+        run: |
+          STAGE=dist/ical-calendar-tui
+          mkdir -p "$STAGE"
+          cp zig-out/bin/ical-calendar-tui "$STAGE/"
+          cp -R launchd scripts README.md "$STAGE/"
+          TARBALL="ical-calendar-tui-$GITHUB_REF_NAME-macos-arm64.tar.gz"
+          tar -czf "dist/$TARBALL" -C dist ical-calendar-tui
+          (cd dist && shasum -a 256 "$TARBALL" > checksums.txt)
+
+      - name: publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            dist/*.tar.gz dist/checksums.txt \
+            --title "ical-calendar-tui $GITHUB_REF_NAME" \
+            --generate-notes

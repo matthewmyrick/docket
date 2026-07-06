@@ -40,11 +40,12 @@ const Event = union(enum) {
 const Mode = enum { tui, daemon, agenda };
 
 const usage =
-    \\usage: ical-calendar-tui [--daemon | --agenda]
+    \\usage: ical-calendar-tui [--daemon | --agenda | --version]
     \\
     \\  (no flags)  interactive calendar TUI
     \\  --daemon    headless poll + notify (for launchd)
     \\  --agenda    print today's events and exit
+    \\  --version   print version and exit
     \\
 ;
 
@@ -60,6 +61,10 @@ pub fn main(init: std.process.Init) !void {
             mode = .daemon;
         } else if (std.mem.eql(u8, arg, "--agenda")) {
             mode = .agenda;
+        } else if (std.mem.eql(u8, arg, "--version")) {
+            const stdout = std.Io.File.stdout();
+            stdout.writeStreamingAll(io, "ical-calendar-tui " ++ @import("build_options").version ++ "\n") catch {};
+            return;
         } else if (std.mem.eql(u8, arg, "--help") or std.mem.eql(u8, arg, "-h")) {
             return writeStderr(io, usage);
         } else {

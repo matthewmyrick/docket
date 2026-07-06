@@ -104,9 +104,24 @@ Zig wrapper, and `ek_free` semantics together — the header is the contract.
 
 ## 6. Versioning & releases
 
-- `0.x` until M5 is done; tag `v0.<milestone>` at each milestone completion.
+- Semver, `0.x` while the owner is still shaking v1 out; `v0.<milestone>`
+  tags marked milestone completions during the initial build.
+- **The version lives in `build.zig.zon`** (`.version`) — build.zig imports
+  it, so `--version` and artifact names always agree with the tag. Bump it
+  in its own commit before releasing.
+- **Cut a release:** `scripts/release.sh`. It runs the gates (fmt, tests,
+  ReleaseSafe build), tags `v<zon-version>`, and pushes; the `release`
+  GitHub workflow rebuilds on a macOS arm64 runner, re-runs the gates,
+  verifies tag == zon version, and publishes the tarball + sha256 to
+  GitHub Releases.
+- Artifacts: `ical-calendar-tui-vX.Y.Z-macos-arm64.tar.gz` containing the
+  binary, `launchd/`, `scripts/`, and the README. arm64-only for now —
+  x86_64 cross-compilation is blocked on Apple SDK header quirks in the
+  ObjC shim (search "sysroot" in build.zig).
 - Release builds: `ReleaseSafe`. Record measured idle RSS in the README per
-  release (the < 10 MB budget is a tracked number, not a vibe).
+  release (a tracked number, not a vibe — see SPEC §12 for current values).
+- CI (`.github/workflows/ci.yml`) runs fmt + tests + a ReleaseSafe compile
+  on every push to main.
 
 ## 7. Agent-to-agent notes
 

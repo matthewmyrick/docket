@@ -15,12 +15,31 @@ toasts). Catppuccin, keyboard-driven, memory-frugal.
 | [`CODING_STANDARDS.md`](CODING_STANDARDS.md) | Binding Zig standards: memory/allocator rules, errors, interop, testing. |
 | [`CONTRIBUTING.md`](CONTRIBUTING.md) | Setup, commands, workflow, pre-commit checklist. |
 
+## Install
+
+Grab the `-macos-arm64.tar.gz` from the
+[latest release](https://github.com/matthewmyrick/ical-calendar-tui/releases/latest)
+(Apple Silicon), or with `gh`:
+
+```bash
+gh release download --repo matthewmyrick/ical-calendar-tui --pattern '*.tar.gz'
+tar -xzf ical-calendar-tui-*-macos-arm64.tar.gz
+./ical-calendar-tui/ical-calendar-tui            # or move it onto your PATH
+```
+
+Or build from source (toolchain below): `zig build -Doptimize=ReleaseSafe`.
+
+First run prompts for calendar access (System Settings → Privacy & Security →
+Calendars). A downloaded binary carries the quarantine flag; if Gatekeeper
+objects: `xattr -d com.apple.quarantine ical-calendar-tui`.
+
 ## Usage
 
 ```bash
 ical-calendar-tui              # the TUI: arrows move days, Enter drills in
 ical-calendar-tui --daemon     # headless poll + notify (launchd)
 ical-calendar-tui --agenda     # print today's events and exit
+ical-calendar-tui --version    # print version and exit
 ```
 
 Install the notification daemon (runs at login, survives the TUI closing):

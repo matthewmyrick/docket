@@ -1,0 +1,22 @@
+# Every push/PR: the same gates as the pre-commit checklist (CONTRIBUTING §4).
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: macos-15 # arm64; the ObjC shim needs the Apple SDK
+    steps:
+      - uses: actions/checkout@v4
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: 0.16.0 # keep in lockstep with .zigversion
+      - name: format gate
+        run: zig fmt --check .
+      - name: unit tests (leak-checked)
+        run: zig build test --summary all
+      - name: release build compiles
+        run: zig build -Doptimize=ReleaseSafe

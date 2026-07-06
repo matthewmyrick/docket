@@ -1,5 +1,9 @@
 const std = @import("std");
 
+/// Single source of truth for the version; surfaces as `--version` and in
+/// release artifact names (scripts/release.sh checks the git tag matches).
+const manifest = @import("build.zig.zon");
+
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
@@ -25,6 +29,9 @@ pub fn build(b: *std.Build) void {
     exe.root_module.addAnonymousImport("Info.plist", .{
         .root_source_file = b.path("native/Info.plist"),
     });
+    const build_options = b.addOptions();
+    build_options.addOption([]const u8, "version", manifest.version);
+    exe.root_module.addOptions("build_options", build_options);
     addNativeBits(b, exe.root_module);
     b.installArtifact(exe);
 
@@ -78,4 +85,11 @@ fn addNativeBits(b: *std.Build, module: *std.Build.Module) void {
     module.linkFramework("EventKit", .{});
     module.linkFramework("Foundation", .{});
     module.linkFramework("AppKit", .{}); // NSColor for calendar colors
+    // Cross-arch builds (zig build -Dtarget=x86_64-macos --sysroot "$(xcrun
+    // --show-sdk-path)") don't get implicit SDK search paths; add them.
+    // Library paths are sysroot-prefixed by zig; framework paths are not.
+    if (b.sysroot) |sysroot| {
+        module.addLibraryPath(.{ .cwd_relative = "/usr/lib" });
+        module.addFrameworkPath(.{ .cwd_relative = b.pathJoin(&.{ sysroot, "System/Library/Frameworks" }) });
+    }
 }
