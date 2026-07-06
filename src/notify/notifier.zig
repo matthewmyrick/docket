@@ -19,6 +19,9 @@ const max_entries = 8192;
 const all_day_slack_seconds: i64 = 3600;
 /// Key: "<lead>|<occurrence-start>|<event-id>", bounded.
 const max_key_bytes = 320;
+/// Notification titles are prefixed so a toast is recognizably ours at a
+/// glance (macOS Calendar's own alerts stay unprefixed).
+const title_prefix = "📅 ";
 
 pub const Notifier = struct {
     gpa: std.mem.Allocator,
@@ -109,7 +112,10 @@ pub const Notifier = struct {
 
         var body_buffer: [256]u8 = undefined;
         const body = notificationBody(&body_buffer, event, lead_minutes, zone) orelse return;
-        sink_mod.send(self.gpa, self.io, self.sink, event.title, body, event.video_link);
+        var title_buffer: [256]u8 = undefined;
+        const title = std.fmt.bufPrint(&title_buffer, title_prefix ++ "{s}", .{event.title}) catch
+            title_prefix ++ "event"; // pathological title length: keep the brand
+        sink_mod.send(self.gpa, self.io, self.sink, title, body, event.video_link);
     }
 
     /// Append to the flocked log and remember in-memory.
