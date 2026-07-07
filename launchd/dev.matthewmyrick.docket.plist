@@ -4,10 +4,10 @@
 <plist version="1.0">
 <dict>
 	<key>Label</key>
-	<string>dev.matthewmyrick.ical-calendar-tui</string>
+	<string>dev.matthewmyrick.docket</string>
 	<key>ProgramArguments</key>
 	<array>
-		<string>__HOME__/.local/bin/ical-calendar-tui</string>
+		<string>__HOME__/.local/bin/docket</string>
 		<string>--daemon</string>
 	</array>
 	<key>RunAtLoad</key>
@@ -15,7 +15,7 @@
 	<key>KeepAlive</key>
 	<true/>
 	<key>StandardErrorPath</key>
-	<string>__HOME__/Library/Logs/ical-calendar-tui.log</string>
+	<string>__HOME__/Library/Logs/docket.log</string>
 	<key>ProcessType</key>
 	<string>Background</string>
 </dict>

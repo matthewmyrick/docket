@@ -77,13 +77,13 @@ jobs:
         env:
           TAG: ${{ steps.version.outputs.tag }}
         run: |
-          ./zig-out/bin/ical-calendar-tui --version
-          STAGE=dist/ical-calendar-tui
+          ./zig-out/bin/docket --version
+          STAGE=dist/docket
           mkdir -p "$STAGE"
-          cp zig-out/bin/ical-calendar-tui "$STAGE/"
+          cp zig-out/bin/docket "$STAGE/"
           cp -R launchd scripts README.md "$STAGE/"
-          TARBALL="ical-calendar-tui-$TAG-macos-arm64.tar.gz"
-          tar -czf "dist/$TARBALL" -C dist ical-calendar-tui
+          TARBALL="docket-$TAG-macos-arm64.tar.gz"
+          tar -czf "dist/$TARBALL" -C dist docket
           (cd dist && shasum -a 256 "$TARBALL" > checksums.txt)
 
       - name: publish release (creates the tag)
@@ -94,5 +94,5 @@ jobs:
           gh release create "$TAG" \
             dist/*.tar.gz dist/checksums.txt \
             --target "$GITHUB_SHA" \
-            --title "ical-calendar-tui $TAG" \
+            --title "docket $TAG" \
             --generate-notes

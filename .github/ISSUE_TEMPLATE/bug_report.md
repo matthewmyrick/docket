@@ -13,7 +13,7 @@ labels: bug
 1.
 
 **Environment**
-- `ical-calendar-tui --version`:
+- `docket --version`:
 - macOS version:
 - Terminal (Ghostty/iTerm2/Terminal.app/…):
 - Source shown in the status bar (`eventkit` or `ical_cli`):

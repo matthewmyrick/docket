@@ -40,7 +40,7 @@ const Event = union(enum) {
 const Mode = enum { tui, daemon, agenda };
 
 const usage =
-    \\usage: ical-calendar-tui [--daemon | --agenda | --version]
+    \\usage: docket [--daemon | --agenda | --version]
     \\
     \\  (no flags)  interactive calendar TUI
     \\  --daemon    headless poll + notify (for launchd)
@@ -63,7 +63,7 @@ pub fn main(init: std.process.Init) !void {
             mode = .agenda;
         } else if (std.mem.eql(u8, arg, "--version")) {
             const stdout = std.Io.File.stdout();
-            stdout.writeStreamingAll(io, "ical-calendar-tui " ++ @import("build_options").version ++ "\n") catch {};
+            stdout.writeStreamingAll(io, "docket " ++ @import("build_options").version ++ "\n") catch {};
             return;
         } else if (std.mem.eql(u8, arg, "--help") or std.mem.eql(u8, arg, "-h")) {
             return writeStderr(io, usage);
@@ -75,7 +75,7 @@ pub fn main(init: std.process.Init) !void {
 
     if (mode != .tui) {
         log_mod.mode = .stderr;
-        if (init.environ_map.get("ICAL_TUI_DEBUG") != null) log_mod.min_level = .debug;
+        if (init.environ_map.get("DOCKET_DEBUG") != null) log_mod.min_level = .debug;
     }
 
     // Config + paths live in one arena for the process lifetime.
@@ -276,13 +276,13 @@ fn resolvePaths(arena: std.mem.Allocator, environ_map: *std.process.Environ.Map)
     const cache_base = environ_map.get("XDG_CACHE_HOME");
     return .{
         .config_file = if (config_base) |base|
-            try std.fmt.allocPrint(arena, "{s}/ical-calendar-tui/config.zon", .{base})
+            try std.fmt.allocPrint(arena, "{s}/docket/config.zon", .{base})
         else
-            try std.fmt.allocPrint(arena, "{s}/.config/ical-calendar-tui/config.zon", .{home}),
+            try std.fmt.allocPrint(arena, "{s}/.config/docket/config.zon", .{home}),
         .cache_dir = if (cache_base) |base|
-            try std.fmt.allocPrint(arena, "{s}/ical-calendar-tui", .{base})
+            try std.fmt.allocPrint(arena, "{s}/docket", .{base})
         else
-            try std.fmt.allocPrint(arena, "{s}/.cache/ical-calendar-tui", .{home}),
+            try std.fmt.allocPrint(arena, "{s}/.cache/docket", .{home}),
     };
 }
 

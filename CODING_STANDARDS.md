@@ -1,4 +1,4 @@
-# Zig Coding Standards — ical-calendar-tui
+# Zig Coding Standards — docket
 
 These rules are **binding** for all code in this repository. They exist to keep
 a systems-language codebase safe, readable, and memory-predictable when

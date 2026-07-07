@@ -1,7 +1,7 @@
 .{
-    .name = .ical_calendar_tui,
+    .name = .docket,
     .version = "0.8.2",
-    .fingerprint = 0xf709905d492648d5, // Changing this has security and trust implications.
+    .fingerprint = 0x1b365a9826db134e, // regenerated for the docket rename (same project, new name)
     .minimum_zig_version = "0.16.0",
     .dependencies = .{
         .vaxis = .{

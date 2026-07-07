@@ -1,4 +1,4 @@
-# Contributing — ical-calendar-tui
+# Contributing — docket
 
 Contributions welcome! Maintainer: [@matthewmyrick](https://github.com/matthewmyrick).
 This file is the operating manual: how to set up, build, verify, and get a
@@ -25,13 +25,13 @@ zig version                      # must match .zigversion / build.zig.zon
 brew tap BRO3886/tap && brew install ical
 brew install terminal-notifier   # optional; osascript is the fallback
 
-git clone https://github.com/matthewmyrick/ical-calendar-tui.git
-cd ical-calendar-tui
+git clone https://github.com/matthewmyrick/docket.git
+cd docket
 zig build test                   # green before you touch anything
 ```
 
 macOS Calendar permission: the native source (M4+) prompts on first run. To
-reset while testing: `tccutil reset Calendar dev.matthewmyrick.ical-calendar-tui`.
+reset while testing: `tccutil reset Calendar dev.matthewmyrick.docket`.
 
 ## 2. Commands
 
@@ -124,7 +124,7 @@ Zig wrapper, and `ek_free` semantics together — the header is the contract.
   the computed tag via `-Dversion`. Local builds report
   `<build.zig.zon version>-dev` — if `--version` doesn't end in `-dev`,
   you're holding a release binary.
-- Artifacts: `ical-calendar-tui-vX.Y.Z-macos-arm64.tar.gz` containing the
+- Artifacts: `docket-vX.Y.Z-macos-arm64.tar.gz` containing the
   binary, `launchd/`, `scripts/`, and the README. arm64-only for now —
   x86_64 cross-compilation is blocked on Apple SDK header quirks in the
   ObjC shim (search "sysroot" in build.zig).

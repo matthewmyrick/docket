@@ -27,9 +27,9 @@ if ! command -v ical >/dev/null 2>&1; then
   brew install ical
 fi
 
-LABEL="dev.matthewmyrick.ical-calendar-tui"
+LABEL="dev.matthewmyrick.docket"
 BIN_DIR="$HOME/.local/bin"
-BIN="$BIN_DIR/ical-calendar-tui"
+BIN="$BIN_DIR/docket"
 PLIST_SRC="launchd/$LABEL.plist"
 PLIST_DST="$HOME/Library/LaunchAgents/$LABEL.plist"
 
@@ -37,7 +37,7 @@ echo "building ReleaseSafe..."
 zig build -Doptimize=ReleaseSafe
 
 mkdir -p "$BIN_DIR" "$HOME/Library/LaunchAgents" "$HOME/Library/Logs"
-install -m 755 zig-out/bin/ical-calendar-tui "$BIN"
+install -m 755 zig-out/bin/docket "$BIN"
 sed "s|__HOME__|$HOME|g" "$PLIST_SRC" > "$PLIST_DST"
 
 # Reload if already running; TCC note: the calendar grant follows the binary
@@ -47,4 +47,4 @@ launchctl bootstrap "gui/$(id -u)" "$PLIST_DST"
 
 echo "installed: $BIN"
 echo "agent:     $PLIST_DST (label $LABEL)"
-echo "logs:      ~/Library/Logs/ical-calendar-tui.log (set ICAL_TUI_DEBUG=1 for cycle lines)"
+echo "logs:      ~/Library/Logs/docket.log (set DOCKET_DEBUG=1 for cycle lines)"

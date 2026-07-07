@@ -3,10 +3,10 @@
 <plist version="1.0">
 <dict>
 	<key>CFBundleIdentifier</key>
-	<string>dev.matthewmyrick.ical-calendar-tui</string>
+	<string>dev.matthewmyrick.docket</string>
 	<key>CFBundleName</key>
-	<string>ical-calendar-tui</string>
+	<string>docket</string>
 	<key>NSCalendarsFullAccessUsageDescription</key>
-	<string>ical-calendar-tui reads your calendars to display events in the terminal and remind you before meetings.</string>
+	<string>docket reads your calendars to display events in the terminal and remind you before meetings.</string>
 </dict>
 </plist>

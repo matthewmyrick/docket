@@ -1,4 +1,4 @@
-# ical-calendar-tui
+# docket
 
 A calendar TUI in **Zig** — reads the local Mac calendar (everything
 Calendar.app sees: iCloud, Google, Exchange), navigable month/day/event views,
@@ -32,20 +32,20 @@ and RSVPing will tell you it's missing.
 ## Install
 
 Grab the `-macos-arm64.tar.gz` from the
-[latest release](https://github.com/matthewmyrick/ical-calendar-tui/releases/latest)
+[latest release](https://github.com/matthewmyrick/docket/releases/latest)
 (Apple Silicon), or with `gh`:
 
 ```bash
-gh release download --repo matthewmyrick/ical-calendar-tui --pattern '*.tar.gz'
-tar -xzf ical-calendar-tui-*-macos-arm64.tar.gz
-./ical-calendar-tui/ical-calendar-tui            # or move it onto your PATH
+gh release download --repo matthewmyrick/docket --pattern '*.tar.gz'
+tar -xzf docket-*-macos-arm64.tar.gz
+./docket/docket            # or move it onto your PATH
 ```
 
 Or build from source (toolchain below): `zig build -Doptimize=ReleaseSafe`.
 
 First run prompts for calendar access (System Settings → Privacy & Security →
 Calendars). A downloaded binary carries the quarantine flag; if Gatekeeper
-objects: `xattr -d com.apple.quarantine ical-calendar-tui`.
+objects: `xattr -d com.apple.quarantine docket`.
 
 ## Connecting Google / Exchange / iCloud calendars
 
@@ -66,10 +66,10 @@ to your default calendar unless you fill the form's `calendar` field.
 ## Usage
 
 ```bash
-ical-calendar-tui              # the TUI: arrows move days, Enter drills in
-ical-calendar-tui --daemon     # headless poll + notify (launchd)
-ical-calendar-tui --agenda     # print today's events and exit
-ical-calendar-tui --version    # print version and exit
+docket              # the TUI: arrows move days, Enter drills in
+docket --daemon     # headless poll + notify (launchd)
+docket --agenda     # print today's events and exit
+docket --version    # print version and exit
 ```
 
 Install the notification daemon (runs at login, survives the TUI closing):
@@ -78,12 +78,12 @@ Install the notification daemon (runs at login, survives the TUI closing):
 scripts/install-daemon.sh      # builds ReleaseSafe, installs launchd agent
 ```
 
-Logs land in `~/Library/Logs/ical-calendar-tui.log`; set `ICAL_TUI_DEBUG=1`
+Logs land in `~/Library/Logs/docket.log`; set `DOCKET_DEBUG=1`
 for per-cycle lines.
 
 ## Configuration
 
-`~/.config/ical-calendar-tui/config.zon` (all keys optional; unknown keys
+`~/.config/docket/config.zon` (all keys optional; unknown keys
 are an error):
 
 ```zon
@@ -141,7 +141,7 @@ source. App-controlled memory is arena-bounded and flat over uptime.
 
 macOS permission note: TCC ties the calendar grant to the binary's identity;
 after rebuilding you may need to re-grant. Reset for testing with
-`tccutil reset Calendar dev.matthewmyrick.ical-calendar-tui`.
+`tccutil reset Calendar dev.matthewmyrick.docket`.
 
 ## Contributing
 

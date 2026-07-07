@@ -9,7 +9,7 @@ pub const Mode = enum { silent, stderr };
 
 /// Set once in main before any logging; never changed after threads start.
 pub var mode: Mode = .silent;
-/// Daemon cycle lines are .debug — visible only when ICAL_TUI_DEBUG is set
+/// Daemon cycle lines are .debug — visible only when DOCKET_DEBUG is set
 /// (ARCHITECTURE.md §10: "debug level, silent otherwise").
 pub var min_level: std.log.Level = .info;
 

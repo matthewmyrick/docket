@@ -1,4 +1,4 @@
-//! Configuration: ~/.config/ical-calendar-tui/config.zon, parsed with
+//! Configuration: ~/.config/docket/config.zon, parsed with
 //! std.zon (ARCHITECTURE.md §11). Missing file = all defaults. Unknown keys are a hard
 //! error naming the key — silent typos are how configs rot.
 

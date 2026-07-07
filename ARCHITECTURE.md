@@ -1,6 +1,6 @@
 # Architecture
 
-How ical-calendar-tui works and why it's built this way. Code comments cite
+How docket works and why it's built this way. Code comments cite
 sections here as `ARCHITECTURE.md §N`. The coding rules that enforce these
 invariants live in [`CODING_STANDARDS.md`](CODING_STANDARDS.md); both are
 binding for contributions (see [`CONTRIBUTING.md`](CONTRIBUTING.md)).
@@ -175,7 +175,7 @@ declined-by-you, already started): fire once per
 Default leads: 10 and 1 minutes.
 
 **Dedup is persistent and multi-process.** An append-only, flock-coordinated
-log at `~/.cache/ical-calendar-tui/notified.log` lets the TUI and daemon run
+log at `~/.cache/docket/notified.log` lets the TUI and daemon run
 simultaneously — whoever fires first wins; both re-read the log tail each
 cycle. Pruned to 7 days at startup. Bounded in memory.
 
@@ -194,13 +194,13 @@ app bundle and will not work from a bare CLI binary.
 
 `--daemon` runs poller + notifier only (no vaxis); launchd assets and
 `scripts/install-daemon.sh` install it as a login agent. Logs one line per
-cycle at debug level (visible with `ICAL_TUI_DEBUG=1`), silent otherwise.
+cycle at debug level (visible with `DOCKET_DEBUG=1`), silent otherwise.
 Daemon + TUI concurrently is safe (§9 dedup log). `--agenda` prints today's
 events and exits — for scripts and shell greetings.
 
 ## §11 Configuration
 
-`~/.config/ical-calendar-tui/config.zon` (ZON via `std.zon`; missing file =
+`~/.config/docket/config.zon` (ZON via `std.zon`; missing file =
 all defaults; **unknown keys are a hard error naming the key** — silent
 typos are how configs rot). Keys and defaults are documented in the README.
 `calendars_exclude`/`show_declined` filter at snapshot-build time — sources
@@ -227,13 +227,13 @@ always fetch everything, keeping both simple.
 
 EventKit access from a bare binary needs the usage string discoverable, or
 macOS denies without prompting. `native/Info.plist`
-(`CFBundleIdentifier` = `dev.matthewmyrick.ical-calendar-tui`,
+(`CFBundleIdentifier` = `dev.matthewmyrick.docket`,
 `NSCalendarsFullAccessUsageDescription`) embeds into the executable via an
 exported `linksection("__TEXT,__info_plist")` constant in `main.zig` —
 byte-identical to the classic `-sectcreate` trick, which Zig 0.16's linker
 driver can't pass through. TCC ties grants to binary identity: rebuilding
 may re-prompt; reset for testing with
-`tccutil reset Calendar dev.matthewmyrick.ical-calendar-tui`.
+`tccutil reset Calendar dev.matthewmyrick.docket`.
 The `.auto` source requests access *before* the TUI takes the terminal so
 the system prompt isn't hidden behind the alt screen.
 
