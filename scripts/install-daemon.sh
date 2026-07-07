@@ -6,6 +6,27 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
+# macOS only: both this app and the `ical` CLI are built on EventKit.
+if [ "$(uname)" != "Darwin" ]; then
+  echo "this app is macOS-only (it reads the EventKit calendar store)" >&2
+  exit 1
+fi
+
+# The `ical` CLI is a hard dependency: it handles all calendar writes
+# (create/edit/RSVP) and is the fallback read source. Install it if missing.
+if ! command -v ical >/dev/null 2>&1; then
+  if ! command -v brew >/dev/null 2>&1; then
+    echo "the \`ical\` CLI is required and Homebrew isn't available to install it." >&2
+    echo "install Homebrew (https://brew.sh) or install ical manually:" >&2
+    echo "  brew tap BRO3886/tap && brew install ical" >&2
+    exit 1
+  fi
+  echo "installing the ical CLI (required for creating/editing/RSVPing events)..."
+  brew tap BRO3886/tap
+  brew trust BRO3886/tap 2>/dev/null || true # newer brew requires trusting taps
+  brew install ical
+fi
+
 LABEL="dev.matthewmyrick.ical-calendar-tui"
 BIN_DIR="$HOME/.local/bin"
 BIN="$BIN_DIR/ical-calendar-tui"

@@ -1,11 +1,25 @@
 # ical-calendar-tui
 
-A macOS calendar TUI in **Zig** — reads the local Mac calendar (everything
+A calendar TUI in **Zig** — reads the local Mac calendar (everything
 Calendar.app sees: iCloud, Google, Exchange), navigable month/day/event views,
-background polling, and meeting notifications (Notification Center or herdr
-toasts). Catppuccin, keyboard-driven, memory-frugal.
+create/edit/RSVP from the keyboard, background polling, and meeting
+notifications. Catppuccin, keyboard-driven, memory-frugal.
 
-> **Status: v1 feature-complete** (milestones M0–M5 landed; see ARCHITECTURE.md §15).
+> **macOS only** (Apple Silicon). Both this app and its write engine (the
+> [`ical`](https://ical.sidv.dev/) CLI) are built on Apple's EventKit — there
+> is nothing to port until the data layer is rethought. macOS 14+ required
+> for the native calendar source.
+
+## Requirements
+
+| What | Why | Install |
+|---|---|---|
+| macOS 14+ (Apple Silicon) | EventKit full-access API | — |
+| [`ical`](https://ical.sidv.dev/) CLI | all calendar **writes** (create/edit/RSVP) + fallback read source | `scripts/install-daemon.sh` installs it automatically, or: `brew tap BRO3886/tap && brew install ical` |
+| [Homebrew](https://brew.sh) | installs the above | — |
+
+Without `ical` the TUI still works read-only via EventKit; creating, editing,
+and RSVPing will tell you it's missing.
 
 ## Documents
 
@@ -32,6 +46,22 @@ Or build from source (toolchain below): `zig build -Doptimize=ReleaseSafe`.
 First run prompts for calendar access (System Settings → Privacy & Security →
 Calendars). A downloaded binary carries the quarantine flag; if Gatekeeper
 objects: `xattr -d com.apple.quarantine ical-calendar-tui`.
+
+## Connecting Google / Exchange / iCloud calendars
+
+This app shows whatever the **Mac's calendar store** knows about, so you
+connect accounts once at the system level — no per-app setup:
+
+1. **System Settings → Internet Accounts → Add Account**
+2. Pick **Google** (or Microsoft Exchange, iCloud, or any CalDAV server),
+   sign in, and make sure the **Calendars** toggle is on
+3. That's it — macOS syncs the account into the same store Calendar.app
+   uses, and this app picks the events up on its next poll (within a
+   minute), each calendar in its own color
+
+Hide calendars you don't want (Birthdays, holidays, a noisy shared one) with
+`calendars_exclude` in the config below. Events you create from the TUI go
+to your default calendar unless you fill the form's `calendar` field.
 
 ## Usage
 
