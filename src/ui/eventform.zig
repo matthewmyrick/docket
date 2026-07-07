@@ -39,7 +39,7 @@ pub const Field = enum {
             .title => "(required)",
             .date => "(required — \"friday\" and \"jul 20\" work too)",
             .time => "(e.g. 3pm or 15:00 · blank = all-day)",
-            .until => if (mode == .add) "(end time · blank = 1h)" else "(unchanged)",
+            .until => if (mode == .add) "(4:30pm or 2h · blank = 1h)" else "(unchanged)",
             .calendar => if (mode == .add) "(default)" else "(unchanged)",
             .location => "",
             .invite => "(emails, comma-separated — sends invitations)",
@@ -117,8 +117,98 @@ fn printAt(win: vaxis.Window, x: u16, y: u16, text: []const u8, style: vaxis.Sty
     _ = child.printSegment(.{ .text = text, .style = overlay_style }, .{});
 }
 
+/// "3pm" / "3:15pm" / "15:00" → minutes after midnight. Null when the text
+/// isn't a recognizable clock time (the CLI's richer parser gets it then).
+pub fn parseTimeOfDay(text: []const u8) ?u32 {
+    var s = std.mem.trim(u8, text, " ");
+    var pm = false;
+    var has_meridiem = false;
+    if (s.len >= 2) {
+        const tail = s[s.len - 2 ..];
+        if (std.ascii.eqlIgnoreCase(tail, "pm")) {
+            pm = true;
+            has_meridiem = true;
+        } else if (std.ascii.eqlIgnoreCase(tail, "am")) {
+            has_meridiem = true;
+        }
+        if (has_meridiem) s = std.mem.trim(u8, s[0 .. s.len - 2], " ");
+    }
+    if (s.len == 0) return null;
+
+    var hour: u32 = undefined;
+    var minute: u32 = 0;
+    if (std.mem.indexOfScalar(u8, s, ':')) |colon| {
+        hour = std.fmt.parseInt(u32, s[0..colon], 10) catch return null;
+        if (s.len - colon - 1 != 2) return null;
+        minute = std.fmt.parseInt(u32, s[colon + 1 ..], 10) catch return null;
+    } else {
+        hour = std.fmt.parseInt(u32, s, 10) catch return null;
+    }
+    if (minute > 59) return null;
+    if (has_meridiem) {
+        if (hour < 1 or hour > 12) return null;
+        if (hour == 12) hour = 0;
+        if (pm) hour += 12;
+    } else {
+        if (hour > 23) return null;
+    }
+    return hour * 60 + minute;
+}
+
+/// "2h" / "45m" / "1h30m" / "1h 30m" → minutes. Null unless the whole text
+/// is number+unit pairs (a bare number is ambiguous, so null).
+pub fn parseDuration(text: []const u8) ?u32 {
+    const s = std.mem.trim(u8, text, " ");
+    if (s.len == 0) return null;
+    var total: u32 = 0;
+    var i: usize = 0;
+    var pairs: usize = 0;
+    while (i < s.len) {
+        while (i < s.len and s[i] == ' ') i += 1;
+        if (i == s.len) break;
+        const digits_start = i;
+        while (i < s.len and std.ascii.isDigit(s[i])) i += 1;
+        if (i == digits_start or i == s.len) return null; // no digits / no unit
+        const value = std.fmt.parseInt(u32, s[digits_start..i], 10) catch return null;
+        switch (std.ascii.toLower(s[i])) {
+            'h' => total += value * 60,
+            'm' => total += value,
+            else => return null,
+        }
+        i += 1;
+        pairs += 1;
+    }
+    if (pairs == 0 or total == 0 or total > 7 * 24 * 60) return null;
+    return total;
+}
+
 test "edit mode hides the invite field" {
     try std.testing.expectEqual(@as(usize, field_count), fields(.add).len);
     try std.testing.expectEqual(@as(usize, field_count - 1), fields(.edit).len);
     try std.testing.expectEqual(Field.location, fields(.edit)[fields(.edit).len - 1]);
+}
+
+test "parseTimeOfDay: 12h, 24h, meridiem edge cases" {
+    try std.testing.expectEqual(@as(?u32, 15 * 60), parseTimeOfDay("3pm"));
+    try std.testing.expectEqual(@as(?u32, 15 * 60 + 15), parseTimeOfDay("3:15pm"));
+    try std.testing.expectEqual(@as(?u32, 15 * 60 + 15), parseTimeOfDay("3:15 PM"));
+    try std.testing.expectEqual(@as(?u32, 15 * 60), parseTimeOfDay("15:00"));
+    try std.testing.expectEqual(@as(?u32, 9 * 60 + 5), parseTimeOfDay("9:05am"));
+    try std.testing.expectEqual(@as(?u32, 0), parseTimeOfDay("12am"));
+    try std.testing.expectEqual(@as(?u32, 12 * 60), parseTimeOfDay("12pm"));
+    try std.testing.expectEqual(@as(?u32, null), parseTimeOfDay("25:00"));
+    try std.testing.expectEqual(@as(?u32, null), parseTimeOfDay("13pm"));
+    try std.testing.expectEqual(@as(?u32, null), parseTimeOfDay("3:5pm"));
+    try std.testing.expectEqual(@as(?u32, null), parseTimeOfDay("noonish"));
+}
+
+test "parseDuration: h/m combos, rejects ambiguity" {
+    try std.testing.expectEqual(@as(?u32, 120), parseDuration("2h"));
+    try std.testing.expectEqual(@as(?u32, 45), parseDuration("45m"));
+    try std.testing.expectEqual(@as(?u32, 75), parseDuration("1h15m"));
+    try std.testing.expectEqual(@as(?u32, 75), parseDuration("1h 15m"));
+    try std.testing.expectEqual(@as(?u32, null), parseDuration("90")); // bare number: ambiguous
+    try std.testing.expectEqual(@as(?u32, null), parseDuration("3pm")); // that's a time
+    try std.testing.expectEqual(@as(?u32, null), parseDuration("0m"));
+    try std.testing.expectEqual(@as(?u32, null), parseDuration(""));
 }

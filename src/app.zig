@@ -445,14 +445,32 @@ pub const App = struct {
             date
         else
             std.fmt.bufPrint(&start_buffer, "{s} {s}", .{ date, time }) catch date;
-        // `until` is a time on the same date (or a date, for all-day spans).
+        // `until` accepts an end time ("4:30pm"), a duration ("2h"), or a
+        // date for all-day spans. Durations are resolved to a clock time
+        // here, rolling to the next day when they cross midnight.
         var end_buffer: [2 * eventform.max_field]u8 = undefined;
         const end = if (until.len == 0)
             ""
         else if (all_day)
             until
-        else
-            std.fmt.bufPrint(&end_buffer, "{s} {s}", .{ date, until }) catch until;
+        else if (eventform.parseDuration(until)) |duration_minutes| blk: {
+            const start_minutes = eventform.parseTimeOfDay(time) orelse {
+                self.flash = "duration needs a plain start time (like 3:15pm)";
+                return;
+            };
+            const end_total = start_minutes + duration_minutes;
+            var next_date_buffer: [10]u8 = undefined;
+            const end_date = if (end_total >= 24 * 60)
+                nextIsoDate(&next_date_buffer, date) orelse {
+                    self.flash = "past-midnight duration needs a YYYY-MM-DD date";
+                    return;
+                }
+            else
+                date;
+            break :blk std.fmt.bufPrint(&end_buffer, "{s} {d:0>2}:{d:0>2}", .{
+                end_date, (end_total / 60) % 24, end_total % 60,
+            }) catch until;
+        } else std.fmt.bufPrint(&end_buffer, "{s} {s}", .{ date, until }) catch until;
 
         // Bounded argv assembly: base + 5 flag pairs + 8 invitations.
         var argv_buffer: [32][]const u8 = undefined;
@@ -614,6 +632,20 @@ pub const App = struct {
             child.stdin = null;
         }
         _ = child.wait(self.io) catch {}; // best-effort
+    }
+
+    /// "2026-07-07" -> "2026-07-08" (into `buffer`); null when the date
+    /// field holds natural language we can't do arithmetic on.
+    fn nextIsoDate(buffer: []u8, date: []const u8) ?[]const u8 {
+        if (date.len != 10 or date[4] != '-' or date[7] != '-') return null;
+        const year = std.fmt.parseInt(i32, date[0..4], 10) catch return null;
+        const month = std.fmt.parseInt(u8, date[5..7], 10) catch return null;
+        const day = std.fmt.parseInt(u8, date[8..10], 10) catch return null;
+        if (month < 1 or month > 12 or day < 1 or day > time_mod.daysInMonth(year, month)) return null;
+        const next = time_mod.addDays(.{ .year = year, .month = month, .day = day }, 1);
+        return std.fmt.bufPrint(buffer, "{d:0>4}-{d:0>2}-{d:0>2}", .{
+            @as(u32, @intCast(next.year)), next.month, next.day,
+        }) catch null;
     }
 
     pub fn lockPoller(self: *App) void {
